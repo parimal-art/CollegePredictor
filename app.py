@@ -78,12 +78,16 @@ INDEX_HTML = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, #e0f7fa, #ffffff);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            margin: 0;
         }
         .header {
             background-color: #4CAF50;
@@ -117,6 +121,7 @@ INDEX_HTML = """
             font-size: 1rem;
             padding: 0.75rem;
             min-height: 44px;
+            width: 100%;
         }
         .form-control:focus {
             border-color: #4CAF50;
@@ -130,6 +135,7 @@ INDEX_HTML = """
             font-weight: 600;
             font-size: 1rem;
             min-height: 44px;
+            width: 100%;
             transition: background-color 0.3s;
         }
         .btn-primary:hover {
@@ -183,30 +189,69 @@ INDEX_HTML = """
         @media (max-width: 576px) {
             .header {
                 font-size: 1rem;
-                padding: 1rem;
+                padding: 0.75rem;
             }
             .form-container, .auth-container {
-                margin: 1rem;
-                padding: 1.5rem;
+                max-width: 100%;
+                margin: 0.5rem;
+                padding: 1rem;
             }
             .form-label {
-                font-size: 1rem;
+                font-size: 0.95rem;
             }
             .form-control {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 padding: 0.5rem;
+                min-height: 40px;
             }
             .btn-primary {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 padding: 0.5rem;
+                min-height: 40px;
             }
             footer {
-                font-size: 0.8rem;
-                padding: 1rem;
+                font-size: 0.75rem;
+                padding: 0.75rem;
             }
             footer a {
                 display: block;
-                margin: 0.5rem 0;
+                margin: 0.25rem 0;
+            }
+            h2 {
+                font-size: 1.25rem;
+            }
+        }
+        @media (max-width: 400px) {
+            .header {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            .form-container, .auth-container {
+                margin: 0.25rem;
+                padding: 0.75rem;
+            }
+            .form-label {
+                font-size: 0.9rem;
+            }
+            .form-control {
+                font-size: 0.8rem;
+                padding: 0.4rem;
+                min-height: 36px;
+            }
+            .btn-primary {
+                font-size: 0.8rem;
+                padding: 0.4rem;
+                min-height: 36px;
+            }
+            footer {
+                font-size: 0.7rem;
+                padding: 0.5rem;
+            }
+            h2 {
+                font-size: 1.1rem;
+            }
+            .error-message, .success-message {
+                font-size: 0.8rem;
             }
         }
     </style>
@@ -624,12 +669,16 @@ RESULTS_HTML = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, #e0f7fa, #ffffff);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            margin: 0;
         }
         .header {
             background-color: #4CAF50;
@@ -659,7 +708,7 @@ RESULTS_HTML = """
             border-radius: 10px;
             overflow: hidden;
             font-size: 1rem;
-            min-width: 800px;
+            min-width: 600px;
         }
         .table th {
             background-color: #4CAF50;
@@ -672,6 +721,7 @@ RESULTS_HTML = """
         .table td {
             padding: 0.75rem;
             vertical-align: middle;
+            white-space: nowrap;
         }
         .table tbody tr:hover {
             background-color: #f1f8e9;
@@ -693,12 +743,14 @@ RESULTS_HTML = """
             border-radius: 10px;
             font-size: 1rem;
             padding: 1rem;
+            word-wrap: break-word;
         }
         .pagination {
             margin-top: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
         }
         footer {
             margin-top: auto;
@@ -716,34 +768,77 @@ RESULTS_HTML = """
         @media (max-width: 576px) {
             .header {
                 font-size: 1rem;
-                padding: 1rem;
+                padding: 0.75rem;
             }
             .results-container {
-                margin: 1rem;
-                padding: 1.5rem;
+                max-width: 100%;
+                margin: 0.5rem;
+                padding: 1rem;
             }
             .table {
-                font-size: 0.85rem;
+                font-size: 0.8rem;
+                min-width: 600px;
             }
             .table th, .table td {
-                padding: 0.5rem;
+                padding: 0.4rem;
             }
             .btn-primary, .btn-success {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 padding: 0.5rem 1rem;
+                min-height: 40px;
                 margin: 0.25rem;
             }
             .alert {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
                 padding: 0.75rem;
             }
             footer {
-                font-size: 0.8rem;
-                padding: 1rem;
+                font-size: 0.75rem;
+                padding: 0.75rem;
             }
             footer a {
                 display: block;
-                margin: 0.5rem 0;
+                margin: 0.25rem 0;
+            }
+            h2 {
+                font-size: 1.25rem;
+            }
+            .pagination {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+        @media (max-width: 400px) {
+            .header {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            .results-container {
+                margin: 0.25rem;
+                padding: 0.75rem;
+            }
+            .table {
+                font-size: 0.75rem;
+                min-width: 600px;
+            }
+            .table th, .table td {
+                padding: 0.3rem;
+            }
+            .btn-primary, .btn-success {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+                min-height: 36px;
+            }
+            .alert {
+                font-size: 0.8rem;
+                padding: 0.5rem;
+            }
+            footer {
+                font-size: 0.7rem;
+                padding: 0.5rem;
+            }
+            h2 {
+                font-size: 1.1rem;
             }
         }
     </style>
