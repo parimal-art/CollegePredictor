@@ -1,0 +1,24 @@
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+
+# Ignore virtual environment files
+venv/
+env/
+
+# Ignore log files
+*.log
+
+# Ignore sensitive files
+firebase-adminsdk.json
+
+# Ignore generated files
+*.csv
+results.csv
+
+# Ignore IDE-specific files (e.g., VS Code)
+.vscode/
+*.code-workspace
+
+# Ignore environment variable files (if using .env)
+.env
