@@ -3,7 +3,7 @@ import json
 import pandas as pd
 import firebase_admin
 from firebase_admin import credentials, auth
-from flask import Flask, request, render_template_string, send_file, abort, redirect, url_for
+from flask import Flask, request, render_template_string, send_file, abort
 import logging
 import re
 import urllib.parse
@@ -416,7 +416,7 @@ INDEX_HTML = """
         window.showPredictor = function () {
             document.getElementById('login-form').classList.remove('active');
             document.getElementById('signup-form').classList.remove('active');
-            document.getElementById('reset-password-form').classList.remove integrable;
+            document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
         };
@@ -451,10 +451,10 @@ INDEX_HTML = """
                 showLogin();
                 window.location.href = '/';
             } catch (error) {
+                console.error('Signup failed:', error.code, error.message);
                 if (error.code === 'auth/email-already-in-use') {
                     existsError.style.display = 'block';
                 } else {
-                    console.error('Signup failed:', error.message);
                     existsError.textContent = 'Signup failed: ' + error.message;
                     existsError.style.display = 'block';
                 }
@@ -468,7 +468,10 @@ INDEX_HTML = """
             const password = document.getElementById('login-password').value;
             const emailError = document.getElementById('login-email-error');
 
+            console.log('Attempting login for:', email);
+
             if (!isValidGmail(email)) {
+                emailError.textContent = 'Please enter a valid Gmail address (e.g., abc@gmail.com).';
                 emailError.style.display = 'block';
                 return;
             }
@@ -476,14 +479,18 @@ INDEX_HTML = """
 
             try {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                console.log('Login successful:', userCredential.user.email);
                 setTimeout(() => {
                     window.location.href = '/predictor';
                 }, 100);
                 updateUserInfo(userCredential.user);
             } catch (error) {
-                console.error('Login failed:', error.message);
+                console.error('Login failed:', error.code, error.message);
                 if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-                    emailError.textContent = 'Invalid username or password';
+                    emailError.textContent = 'Invalid email or password.';
+                    emailError.style.display = 'block';
+                } else if (error.code === 'auth/too-many-requests') {
+                    emailError.textContent = 'Too many attempts. Please try again later.';
                     emailError.style.display = 'block';
                 } else {
                     emailError.textContent = 'Login failed: ' + error.message;
@@ -498,8 +505,6 @@ INDEX_HTML = """
             const email = document.getElementById('reset-email').value;
             const emailError = document.getElementById('reset-email-error');
             const successMessage = document.getElementById('reset-email-success');
-            let attempt = 0;
-            const maxAttempts = 2;
 
             if (!isValidGmail(email)) {
                 emailError.style.display = 'block';
@@ -509,45 +514,33 @@ INDEX_HTML = """
             emailError.style.display = 'none';
             successMessage.style.display = 'none';
 
-            async function sendResetEmail() {
-                try {
-                    console.log(`Attempt ${attempt + 1} to send reset email to: ${email} at ${new Date().toISOString()}`);
-                    await sendPasswordResetEmail(auth, email);
-                    console.log(`Reset email request successful for ${email} at ${new Date().toISOString()}`);
-                    successMessage.style.display = 'block';
-                    setTimeout(() => {
-                        showLogin();
-                        hideErrors();
-                    }, 3000);
-                } catch (error) {
-                    console.error(`Reset password failed for ${email} at ${new Date().toISOString()}:`, error.message, error.code);
-                    if (attempt < maxAttempts - 1 && error.code !== 'auth/user-not-found' && error.code !== 'auth/too-many-requests') {
-                        attempt++;
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        await sendResetEmail();
-                    } else {
-                        emailError.textContent = error.code === 'auth/user-not-found' ? 'No user found with this email.' :
-                                               error.code === 'auth/too-many-requests' ? 'Too many requests. Try again later.' :
-                                               'Reset failed: Unable to send email. Check your connection or Firebase settings.';
-                        emailError.style.display = 'block';
-                    }
-                }
+            try {
+                await sendPasswordResetEmail(auth, email);
+                console.log('Password reset email sent to:', email);
+                successMessage.style.display = 'block';
+                setTimeout(() => {
+                    showLogin();
+                    hideErrors();
+                }, 3000);
+            } catch (error) {
+                console.error('Reset password failed:', error.code, error.message);
+                emailError.textContent = error.code === 'auth/user-not-found' ? 'No user found with this email.' :
+                                        error.code === 'auth/too-many-requests' ? 'Too many requests. Try again later.' :
+                                        'Reset failed: ' + error.message;
+                emailError.style.display = 'block';
             }
-
-            sendResetEmail();
         });
 
         // Sign Out
         window.signOut = function () {
             signOut(auth).then(() => {
+                console.log('User signed out');
                 window.location.href = '/';
             }).catch((error) => {
                 console.error('Sign out failed:', error.message);
                 alert('Sign out failed: ' + error.message);
             });
         };
-
-喧
 
         // Update User Info
         function updateUserInfo(user) {
@@ -599,7 +592,7 @@ INDEX_HTML = """
                 document.write(html);
                 document.close();
             } catch (error) {
-                console.error('Error:', error.message);
+                console.error('Predict error:', error.message);
                 alert('Error: ' + error.message);
             } finally {
                 document.querySelector('.spinner').style.display = 'none';
@@ -866,6 +859,7 @@ RESULTS_HTML = """
         // Sign Out
         window.signOut = function () {
             signOut(auth).then(() => {
+                console.log('User signed out');
                 window.location.href = '/';
             }).catch((error) => {
                 console.error('Sign out failed:', error.message);
@@ -1003,7 +997,6 @@ def predict():
         year = form_data.get('year', 'Any')
         if not 1 <= rank <= 1000000:
             raise ValueError("Rank must be between 1 and 1,000,000")
-        year_int = int(year) if year != 'Any' and year.isdigit() else None
         logger.debug(f"Input: rank={rank}, program={program}, stream={stream}, category={category}, quota={quota}, seat_type={seat_type}, round={round}, year={year}, page={page}")
         filtered_data = data.copy()
         low_rank_message = None
@@ -1090,7 +1083,7 @@ def predict():
         end = min(start + per_page, total_results)
         paginated_results = filtered_data.iloc[start:end][['Institute', 'Program', 'Round', 'Category', 'Quota', 'Seat Type', 'Opening Rank', 'Closing Rank', 'Year']].to_dict('records')
         has_next = end < total_results
-        form_data['page'] = str(page)  # Ensure page is included in form_data for pagination
+        form_data['page'] = str(page)
         logger.debug(f"Rendering page {page} with {len(paginated_results)} results, total={total_results}, has_next={has_next}")
         return render_template_string(RESULTS_HTML, results=paginated_results, rank=rank, page=page, has_next=has_next,
                                      total_results=total_results, form_data=form_data, low_rank_message=low_rank_message,
