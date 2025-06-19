@@ -88,9 +88,10 @@ INDEX_HTML = """
         .header {
             background-color: #4CAF50;
             color: white;
-            padding: 1rem;
+            padding: 1.5rem;
             text-align: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 1.25rem;
         }
         .form-container {
             max-width: 600px;
@@ -107,11 +108,15 @@ INDEX_HTML = """
         .form-label {
             font-weight: 600;
             color: #333;
+            font-size: 1.1rem;
         }
         .form-control {
             border-radius: 10px;
             border: 2px solid #e0e0e0;
             transition: border-color 0.3s;
+            font-size: 1rem;
+            padding: 0.75rem;
+            min-height: 44px;
         }
         .form-control:focus {
             border-color: #4CAF50;
@@ -123,6 +128,8 @@ INDEX_HTML = """
             border-radius: 10px;
             padding: 0.75rem;
             font-weight: 600;
+            font-size: 1rem;
+            min-height: 44px;
             transition: background-color 0.3s;
         }
         .btn-primary:hover {
@@ -141,8 +148,13 @@ INDEX_HTML = """
             background-color: #333;
             color: white;
             text-align: center;
-            padding: 1rem;
+            padding: 1.5rem;
             font-size: 0.9rem;
+        }
+        footer a {
+            margin: 0 0.5rem;
+            color: #4CAF50;
+            text-decoration: none;
         }
         .auth-container {
             display: none;
@@ -169,9 +181,32 @@ INDEX_HTML = """
             display: none;
         }
         @media (max-width: 576px) {
+            .header {
+                font-size: 1rem;
+                padding: 1rem;
+            }
             .form-container, .auth-container {
                 margin: 1rem;
                 padding: 1.5rem;
+            }
+            .form-label {
+                font-size: 1rem;
+            }
+            .form-control {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            .btn-primary {
+                font-size: 0.9rem;
+                padding: 0.5rem;
+            }
+            footer {
+                font-size: 0.8rem;
+                padding: 1rem;
+            }
+            footer a {
+                display: block;
+                margin: 0.5rem 0;
             }
         }
     </style>
@@ -317,10 +352,11 @@ INDEX_HTML = """
     </div>
     <footer>
         © 2025 Parimal Maity, Brainware University (<a href="mailto:parimalmaity852@gmail.com" style="color: #4CAF50;">parimalmaity852@gmail.com</a>)
-        | <a href="https://www.facebook.com/parimal.maity.12382" target="_blank" style="color: #4CAF50;"><i class="fab fa-facebook-f"></i> Facebook</a>
-        | <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin-in"></i> LinkedIn</a>
-        | <a href="https://x.com/parimalmaity852?t=IdjWLQPxEXOcnysJEeHJ4g&s=09" target="_blank" style="color: #4CAF50;"><i class="fab fa-x-twitter"></i> X</a>
-        | <a href="https://www.instagram.com/parimalmaity50/" target="_blank" style="color: #4CAF50;"><i class="fab fa-instagram"></i> Instagram</a>
+        <br>
+        <a href="https://www.facebook.com/parimal.maity.12382" target="_blank" style="color: #4CAF50;"><i class="fab fa-facebook-f"></i> Facebook</a>
+        <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin-in"></i> LinkedIn</a>
+        <a href="https://x.com/parimalmaity852?t=IdjWLQPxEXOcnysJEeHJ4g&s=09" target="_blank" style="color: #4CAF50;"><i class="fab fa-x-twitter"></i> X</a>
+        <a href="https://www.instagram.com/parimalmaity50/" target="_blank" style="color: #4CAF50;"><i class="fab fa-instagram"></i> Instagram</a>
     </footer>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
@@ -380,7 +416,7 @@ INDEX_HTML = """
         window.showPredictor = function () {
             document.getElementById('login-form').classList.remove('active');
             document.getElementById('signup-form').classList.remove('active');
-            document.getElementById('reset-password-form').classList.remove('active');
+            document.getElementById('reset-password-form').classList.remove integrable;
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
         };
@@ -511,6 +547,8 @@ INDEX_HTML = """
             });
         };
 
+喧
+
         // Update User Info
         function updateUserInfo(user) {
             document.getElementById('user-info').style.display = 'block';
@@ -603,9 +641,10 @@ RESULTS_HTML = """
         .header {
             background-color: #4CAF50;
             color: white;
-            padding: 1rem;
+            padding: 1.5rem;
             text-align: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 1.25rem;
         }
         .results-container {
             max-width: 1200px;
@@ -619,9 +658,15 @@ RESULTS_HTML = """
         .results-container:hover {
             transform: translateY(-5px);
         }
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
         .table {
             border-radius: 10px;
             overflow: hidden;
+            font-size: 1rem;
+            min-width: 800px;
         }
         .table th {
             background-color: #4CAF50;
@@ -629,43 +674,83 @@ RESULTS_HTML = """
             position: sticky;
             top: 0;
             z-index: 1;
+            padding: 0.75rem;
+        }
+        .table td {
+            padding: 0.75rem;
+            vertical-align: middle;
         }
         .table tbody tr:hover {
             background-color: #f1f8e9;
         }
-        .btn-primary {
+        .btn-primary, .btn-success {
             background-color: #4CAF50;
             border-color: #4CAF50;
             border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            min-height: 44px;
+            margin: 0.5rem;
             transition: background-color 0.3s;
         }
-        .btn-primary:hover {
+        .btn-primary:hover, .btn-success:hover {
             background-color: #45a049;
-        }
-        .btn-success {
-            border-radius: 10px;
         }
         .alert {
             border-radius: 10px;
+            font-size: 1rem;
+            padding: 1rem;
         }
         .pagination {
             margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         footer {
             margin-top: auto;
             background-color: #333;
             color: white;
             text-align: center;
-            padding: 1rem;
+            padding: 1.5rem;
             font-size: 0.9rem;
         }
+        footer a {
+            margin: 0 0.5rem;
+            color: #4CAF50;
+            text-decoration: none;
+        }
         @media (max-width: 576px) {
+            .header {
+                font-size: 1rem;
+                padding: 1rem;
+            }
             .results-container {
                 margin: 1rem;
                 padding: 1.5rem;
             }
             .table {
+                font-size: 0.85rem;
+            }
+            .table th, .table td {
+                padding: 0.5rem;
+            }
+            .btn-primary, .btn-success {
                 font-size: 0.9rem;
+                padding: 0.5rem 1rem;
+                margin: 0.25rem;
+            }
+            .alert {
+                font-size: 0.9rem;
+                padding: 0.75rem;
+            }
+            footer {
+                font-size: 0.8rem;
+                padding: 1rem;
+            }
+            footer a {
+                display: block;
+                margin: 0.5rem 0;
             }
         }
     </style>
@@ -723,7 +808,7 @@ RESULTS_HTML = """
                     </tbody>
                 </table>
             </div>
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="pagination">
                 <div>
                     {% if page > 1 %}
                         <button class="btn btn-primary" onclick="navigatePage({{ page - 1 }})">Previous</button>
@@ -748,10 +833,11 @@ RESULTS_HTML = """
     </div>
     <footer>
         © 2025 Parimal Maity, Brainware University (<a href="mailto:parimalmaity852@gmail.com" style="color: #4CAF50;">parimalmaity852@gmail.com</a>)
-        | <a href="https://www.facebook.com/parimal.maity.12382" target="_blank" style="color: #4CAF50;"><i class="fab fa-facebook-f"></i> Facebook</a>
-        | <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin-in"></i> LinkedIn</a>
-        | <a href="https://x.com/parimalmaity852?t=IdjWLQPxEXOcnysJEeHJ4g&s=09" target="_blank" style="color: #4CAF50;"><i class="fab fa-x-twitter"></i> X</a>
-        | <a href="https://www.instagram.com/parimalmaity50/" target="_blank" style="color: #4CAF50;"><i class="fab fa-instagram"></i> Instagram</a>
+        <br>
+        <a href="https://www.facebook.com/parimal.maity.12382" target="_blank" style="color: #4CAF50;"><i class="fab fa-facebook-f"></i> Facebook</a>
+        <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin-in"></i> LinkedIn</a>
+        <a href="https://x.com/parimalmaity852?t=IdjWLQPxEXOcnysJEeHJ4g&s=09" target="_blank" style="color: #4CAF50;"><i class="fab fa-x-twitter"></i> X</a>
+        <a href="https://www.instagram.com/parimalmaity50/" target="_blank" style="color: #4CAF50;"><i class="fab fa-instagram"></i> Instagram</a>
     </footer>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
@@ -797,9 +883,12 @@ RESULTS_HTML = """
         window.navigatePage = async function(page) {
             try {
                 const idToken = await auth.currentUser.getIdToken(true);
+                console.log('Navigating to page:', page, 'Form data:', formDataCache);
                 const formData = new FormData();
                 for (const [key, value] of Object.entries(formDataCache)) {
-                    formData.append(key, value);
+                    if (key !== 'page') {
+                        formData.append(key, value);
+                    }
                 }
                 formData.append('page', page);
                 const response = await fetch('/predict', {
@@ -1001,6 +1090,8 @@ def predict():
         end = min(start + per_page, total_results)
         paginated_results = filtered_data.iloc[start:end][['Institute', 'Program', 'Round', 'Category', 'Quota', 'Seat Type', 'Opening Rank', 'Closing Rank', 'Year']].to_dict('records')
         has_next = end < total_results
+        form_data['page'] = str(page)  # Ensure page is included in form_data for pagination
+        logger.debug(f"Rendering page {page} with {len(paginated_results)} results, total={total_results}, has_next={has_next}")
         return render_template_string(RESULTS_HTML, results=paginated_results, rank=rank, page=page, has_next=has_next,
                                      total_results=total_results, form_data=form_data, low_rank_message=low_rank_message,
                                      min_rank_message=min_rank_message)
