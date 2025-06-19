@@ -6,6 +6,7 @@ from firebase_admin import credentials, auth
 from flask import Flask, request, render_template_string, send_file, abort, redirect, url_for
 import logging
 import re
+import urllib.parse
 
 # Initialize Firebase Admin SDK using environment variable
 if not firebase_admin._apps:
@@ -737,7 +738,7 @@ RESULTS_HTML = """
             </div>
         {% endif %}
         <div class="text-center mt-4">
-            <a href="/predictor?{% for key, value in form_data.items() %}{{ key }}={{ value|urlencode }}&{% endfor %}" class="btn btn-success">Back to Home</a>
+            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
         </div>
     </div>
     <footer>
@@ -807,7 +808,7 @@ def home():
     seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
     rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
     years = sorted([x for x in data['Year'].unique() if x != 0])
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items()}
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year']}
     return render_template_string(INDEX_HTML, programs=programs, streams=streams, categories=categories,
                                  quotas=quotas, seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
@@ -820,7 +821,7 @@ def predictor():
     seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
     rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
     years = sorted([x for x in data['Year'].unique() if x != 0])
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items()}
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year']}
     return render_template_string(INDEX_HTML, programs=programs, streams=streams, categories=categories,
                                  quotas=quotas, seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
@@ -832,8 +833,11 @@ def predict():
         if request.method == 'POST':
             form_data = request.form.to_dict()
         else:
-            form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items()}
-        rank = int(form_data.get('rank', 0))
+            form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year', 'page']}
+        rank = int(form_data.get('rank', '0'))  # Default to 0 if missing
+        page = int(form_data.get('page', '1'))  # Default to 1 if missing
+        per_page = 20
+        # Ensure other fields have defaults
         program = form_data.get('program', 'Any')
         stream = form_data.get('stream', 'Any')
         category = form_data.get('category', 'Any')
@@ -841,9 +845,12 @@ def predict():
         seat_type = form_data.get('seat_type', 'Any')
         round = form_data.get('round', 'Any')
         year = form_data.get('year', 'Any')
-        logger.debug(f"Input: rank={rank}, program={program}, stream={stream}, category={category}, quota={quota}, seat_type={seat_type}, round={round}, year={year}")
-        page = int(form_data.get('page', 1))
-        per_page = 20
+        # Validate rank
+        if not 1 <= rank <= 1000000:
+            raise ValueError("Rank must be between 1 and 1,000,000")
+        # Validate year if not 'Any'
+        year_int = int(year) if year != 'Any' and year.isdigit() else None
+        logger.debug(f"Input: rank={rank}, program={program}, stream={stream}, category={category}, quota={quota}, seat_type={seat_type}, round={round}, year={year}, page={page}")
         filtered_data = data.copy()
         low_rank_message = None
         min_rank_message = None
@@ -920,15 +927,21 @@ def predict():
             filtered_data = filtered_data.sort_values('Opening Rank')
         else:
             filtered_data = filtered_data.sort_values('Closing Rank')
-        filtered_data.to_csv('results.csv', index=False)
+        if not filtered_data.empty:
+            filtered_data.to_csv('results.csv', index=False)
+        else:
+            logger.warning("No data to save to results.csv")
         total_results = len(filtered_data)
         start = (page - 1) * per_page
-        end = start + per_page
+        end = min(start + per_page, total_results)
         paginated_results = filtered_data.iloc[start:end][['Institute', 'Program', 'Round', 'Category', 'Quota', 'Seat Type', 'Opening Rank', 'Closing Rank', 'Year']].to_dict('records')
         has_next = end < total_results
         return render_template_string(RESULTS_HTML, results=paginated_results, rank=rank, page=page, has_next=has_next,
                                      total_results=total_results, form_data=form_data, low_rank_message=low_rank_message,
                                      min_rank_message=min_rank_message)
+    except ValueError as ve:
+        logger.error(f"Validation error in predict: {str(ve)}")
+        abort(400, description=f"Validation Error: {str(ve)}")
     except Exception as e:
         logger.error(f"Error in predict: {str(e)}")
         abort(500, description=f"Error: {str(e)}")
@@ -937,7 +950,11 @@ def predict():
 def download():
     try:
         verify_token()
-        return send_file('results.csv', as_attachment=True, download_name='college_results.csv')
+        if os.path.exists('results.csv'):
+            return send_file('results.csv', as_attachment=True, download_name='college_results.csv')
+        else:
+            logger.error("No results file found")
+            abort(404, description="No results to download.")
     except Exception as e:
         logger.error(f"Error in download: {str(e)}")
         abort(500, description=f"Error: No results to download. {str(e)}")
