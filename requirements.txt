@@ -1,5 +1,6 @@
 flask==2.3.2
-pandas==2.0.3
-openpyxl==3.1.2  # For reading .xls files
+pandas>=2.2.0
+openpyxl==3.1.2
 firebase-admin==6.2.0
-python-magic==0.4.27  # If used for file type detection
+python-magic==0.4.27
+numpy>=2.0.0
