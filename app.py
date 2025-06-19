@@ -7,6 +7,7 @@ from flask import Flask, request, render_template_string, send_file, abort, redi
 import logging
 import re
 import urllib.parse
+import tempfile
 
 # Initialize Firebase Admin SDK using environment variable
 if not firebase_admin._apps:
@@ -168,11 +169,30 @@ INDEX_HTML = """
             margin-top: 0.5rem;
             display: none;
         }
-        @media (max-width: 576px) {
-            .form-container, .auth-container {
+        #my-data {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        @media (max-width: 768px) {
+            .form-container, #my-data {
                 margin: 1rem;
-                padding: 1.5rem;
+                padding: 1rem;
             }
+            .form-control, .btn-primary {
+                font-size: 0.9rem;
+            }
+        }
+        @media (max-width: 576px) {
+            .form-container, #my-data {
+                margin: 0.5rem;
+                padding: 0.75rem;
+            }
+            h2 { font-size: 1.2rem; }
+            .form-label { font-size: 0.9rem; }
         }
     </style>
 </head>
@@ -315,6 +335,15 @@ INDEX_HTML = """
             </div>
         </form>
     </div>
+    <div id="my-data" style="display: none;">
+        <h3 class="text-center">My Data</h3>
+        <p class="text-center">
+            <a href="https://www.facebook.com/parimal.maity.12382" target="_blank">Facebook</a> |
+            <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank">LinkedIn</a> |
+            <a href="https://x.com/parimalmaity852?t=IdjWLOPxEXOcysjEeHJ4g&s=09" target="_blank">X</a> |
+            <a href="https://www.instagram.com/parimalmaity50/" target="_blank">Instagram</a>
+        </p>
+    </div>
     <footer>
         © 2025 Parimal Maity, Brainware University (<a href="mailto:parimalmaity852@gmail.com" style="color: #4CAF50;">parimalmaity852@gmail.com</a>)
         | <a href="https://github.com/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-github"></i> GitHub</a>
@@ -357,6 +386,7 @@ INDEX_HTML = """
             document.getElementById('signup-form').classList.remove('active');
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'none';
+            document.getElementById('my-data').style.display = 'none';
             hideErrors();
         };
         window.showSignup = function () {
@@ -364,6 +394,7 @@ INDEX_HTML = """
             document.getElementById('signup-form').classList.add('active');
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'none';
+            document.getElementById('my-data').style.display = 'none';
             hideErrors();
         };
         window.showResetPassword = function () {
@@ -371,6 +402,7 @@ INDEX_HTML = """
             document.getElementById('signup-form').classList.remove('active');
             document.getElementById('reset-password-form').classList.add('active');
             document.getElementById('predictor-form').style.display = 'none';
+            document.getElementById('my-data').style.display = 'none';
             hideErrors();
         };
         window.showPredictor = function () {
@@ -378,6 +410,7 @@ INDEX_HTML = """
             document.getElementById('signup-form').classList.remove('active');
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
+            document.getElementById('my-data').style.display = 'block';
             hideErrors();
         };
 
@@ -654,14 +687,30 @@ RESULTS_HTML = """
             padding: 1rem;
             font-size: 0.9rem;
         }
-        @media (max-width: 576px) {
-            .results-container {
+        #my-data {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-top: 1rem;
+        }
+        @media (max-width: 768px) {
+            .results-container, #my-data {
                 margin: 1rem;
-                padding: 1.5rem;
+                padding: 1rem;
             }
-            .table {
-                font-size: 0.9rem;
+            .table { font-size: 0.9rem; }
+        }
+        @media (max-width: 576px) {
+            .results-container, #my-data {
+                margin: 0.5rem;
+                padding: 0.75rem;
             }
+            h2 { font-size: 1.2rem; }
+            .table { font-size: 0.8rem; }
+            .btn-primary { font-size: 0.9rem; }
         }
     </style>
 </head>
@@ -740,6 +789,15 @@ RESULTS_HTML = """
         <div class="text-center mt-4">
             <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
         </div>
+    </div>
+    <div id="my-data">
+        <h3 class="text-center">My Data</h3>
+        <p class="text-center">
+            <a href="https://www.facebook.com/parimal.maity.12382" target="_blank">Facebook</a> |
+            <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank">LinkedIn</a> |
+            <a href="https://x.com/parimalmaity852?t=IdjWLOPxEXOcysjEeHJ4g&s=09" target="_blank">X</a> |
+            <a href="https://www.instagram.com/parimalmaity50/" target="_blank">Instagram</a>
+        </p>
     </div>
     <footer>
         © 2025 Parimal Maity, Brainware University (<a href="mailto:parimalmaity852@gmail.com" style="color: #4CAF50;">parimalmaity852@gmail.com</a>)
@@ -927,10 +985,6 @@ def predict():
             filtered_data = filtered_data.sort_values('Opening Rank')
         else:
             filtered_data = filtered_data.sort_values('Closing Rank')
-        if not filtered_data.empty:
-            filtered_data.to_csv('results.csv', index=False)
-        else:
-            logger.warning("No data to save to results.csv")
         total_results = len(filtered_data)
         start = (page - 1) * per_page
         end = min(start + per_page, total_results)
@@ -950,14 +1004,52 @@ def predict():
 def download():
     try:
         verify_token()
-        if os.path.exists('results.csv'):
-            return send_file('results.csv', as_attachment=True, download_name='college_results.csv')
-        else:
-            logger.error("No results file found")
-            abort(404, description="No results to download.")
+        filtered_data = pd.DataFrame()  # Initialize empty DataFrame
+        form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year']}
+        rank = int(form_data.get('rank', '0'))
+        program = form_data.get('program', 'Any')
+        stream = form_data.get('stream', 'Any')
+        category = form_data.get('category', 'Any')
+        quota = form_data.get('quota', 'Any')
+        seat_type = form_data.get('seat_type', 'Any')
+        round = form_data.get('round', 'Any')
+        year = form_data.get('year', 'Any')
+        
+        temp_data = data.copy()
+        if program != 'Any':
+            temp_data = temp_data[temp_data['Program'] == program]
+        if stream != 'Any':
+            temp_data = temp_data[temp_data['Stream'] == stream]
+        if category != 'Any':
+            temp_data = temp_data[temp_data['Category'] == category]
+        if quota != 'Any':
+            temp_data = temp_data[temp_data['Quota'] == quota]
+        if seat_type != 'Any':
+            temp_data = temp_data[temp_data['Seat Type'] == seat_type]
+        if round != 'Any':
+            temp_data = temp_data[temp_data['Round'] == round]
+        if year != 'Any':
+            temp_data = temp_data[temp_data['Year'] == int(year)]
+        
+        if not temp_data.empty and 'Opening Rank' in temp_data.columns:
+            filtered_data = temp_data[
+                (temp_data['Opening Rank'] <= rank) &
+                (temp_data['Closing Rank'] >= rank)
+            ]
+            if filtered_data.empty:
+                filtered_data = temp_data.copy()
+                filtered_data['Rank_Diff'] = abs(filtered_data['Opening Rank'] - rank)
+                filtered_data = filtered_data.sort_values('Rank_Diff').drop(columns=['Rank_Diff'])
+
+        if filtered_data.empty:
+            abort(404, description="No results available for download.")
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
+            filtered_data.to_csv(tmp_file.name, index=False)
+            return send_file(tmp_file.name, as_attachment=True, download_name=f'college_results_rank_{rank}.csv')
     except Exception as e:
         logger.error(f"Error in download: {str(e)}")
-        abort(500, description=f"Error: No results to download. {str(e)}")
+        abort(500, description=f"Error: Unable to download results. {str(e)}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
