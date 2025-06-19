@@ -317,9 +317,10 @@ INDEX_HTML = """
     </div>
     <footer>
         © 2025 Parimal Maity, Brainware University (<a href="mailto:parimalmaity852@gmail.com" style="color: #4CAF50;">parimalmaity852@gmail.com</a>)
-        | <a href="https://github.com/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-github"></i> GitHub</a>
-        | <a href="https://linkedin.com/in/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin"></i> LinkedIn</a>
-        | <a href="https://twitter.com/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-twitter"></i> Twitter</a>
+        | <a href="https://www.facebook.com/parimal.maity.12382" target="_blank" style="color: #4CAF50;"><i class="fab fa-facebook-f"></i> Facebook</a>
+        | <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin-in"></i> LinkedIn</a>
+        | <a href="https://x.com/parimalmaity852?t=IdjWLQPxEXOcnysJEeHJ4g&s=09" target="_blank" style="color: #4CAF50;"><i class="fab fa-x-twitter"></i> X</a>
+        | <a href="https://www.instagram.com/parimalmaity50/" target="_blank" style="color: #4CAF50;"><i class="fab fa-instagram"></i> Instagram</a>
     </footer>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
@@ -344,6 +345,9 @@ INDEX_HTML = """
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+
+        // Store form data globally for pagination
+        let formDataCache = {};
 
         // Toggle Password
         window.togglePassword = function (id) {
@@ -407,9 +411,9 @@ INDEX_HTML = """
 
             try {
                 await createUserWithEmailAndPassword(auth, email, password);
-                await signOut(auth); // Sign out immediately after signup
-                showLogin(); // Show login form
-                window.location.href = '/'; // Redirect to login page
+                await signOut(auth);
+                showLogin();
+                window.location.href = '/';
             } catch (error) {
                 if (error.code === 'auth/email-already-in-use') {
                     existsError.style.display = 'block';
@@ -472,18 +476,18 @@ INDEX_HTML = """
             async function sendResetEmail() {
                 try {
                     console.log(`Attempt ${attempt + 1} to send reset email to: ${email} at ${new Date().toISOString()}`);
-                    const response = await sendPasswordResetEmail(auth, email);
+                    await sendPasswordResetEmail(auth, email);
                     console.log(`Reset email request successful for ${email} at ${new Date().toISOString()}`);
                     successMessage.style.display = 'block';
                     setTimeout(() => {
                         showLogin();
                         hideErrors();
-                    }, 3000); // Delay 3 seconds to allow user to read message
+                    }, 3000);
                 } catch (error) {
                     console.error(`Reset password failed for ${email} at ${new Date().toISOString()}:`, error.message, error.code);
                     if (attempt < maxAttempts - 1 && error.code !== 'auth/user-not-found' && error.code !== 'auth/too-many-requests') {
                         attempt++;
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+                        await new Promise(resolve => setTimeout(resolve, 2000));
                         await sendResetEmail();
                     } else {
                         emailError.textContent = error.code === 'auth/user-not-found' ? 'No user found with this email.' :
@@ -539,6 +543,7 @@ INDEX_HTML = """
                 const idToken = await auth.currentUser.getIdToken(true);
                 const form = document.getElementById('predict-form');
                 const formData = new FormData(form);
+                formDataCache = Object.fromEntries(formData.entries());
                 const response = await fetch('/predict', {
                     method: 'POST',
                     headers: {
@@ -570,7 +575,7 @@ INDEX_HTML = """
             return gmailPattern.test(email);
         }
 
-        showLogin(); // Default view
+        showLogin();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
@@ -721,14 +726,14 @@ RESULTS_HTML = """
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     {% if page > 1 %}
-                        <a href="/predict?page={{ page - 1 }}{% for key, value in form_data.items() %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-primary">Previous</a>
+                        <button class="btn btn-primary" onclick="navigatePage({{ page - 1 }})">Previous</button>
                     {% endif %}
                     {% if has_next %}
-                        <a href="/predict?page={{ page + 1 }}{% for key, value in form_data.items() %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-primary">Next</a>
+                        <button class="btn btn-primary" onclick="navigatePage({{ page + 1 }})">Next</button>
                     {% endif %}
                 </div>
                 <div>
-                    <a href="/download" class="btn btn-primary">Download All Results</a>
+                    <button class="btn btn-primary" onclick="downloadResults()">Download All Results</button>
                 </div>
             </div>
             <p class="mt-2 text-center">Page {{ page }} | Showing {{ results|length }} of {{ total_results }} results</p>
@@ -743,9 +748,10 @@ RESULTS_HTML = """
     </div>
     <footer>
         © 2025 Parimal Maity, Brainware University (<a href="mailto:parimalmaity852@gmail.com" style="color: #4CAF50;">parimalmaity852@gmail.com</a>)
-        | <a href="https://github.com/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-github"></i> GitHub</a>
-        | <a href="https://linkedin.com/in/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin"></i> LinkedIn</a>
-        | <a href="https://twitter.com/parimalmaity" target="_blank" style="color: #4CAF50;"><i class="fab fa-twitter"></i> Twitter</a>
+        | <a href="https://www.facebook.com/parimal.maity.12382" target="_blank" style="color: #4CAF50;"><i class="fab fa-facebook-f"></i> Facebook</a>
+        | <a href="https://www.linkedin.com/in/parimal-maity-852241286/" target="_blank" style="color: #4CAF50;"><i class="fab fa-linkedin-in"></i> LinkedIn</a>
+        | <a href="https://x.com/parimalmaity852?t=IdjWLQPxEXOcnysJEeHJ4g&s=09" target="_blank" style="color: #4CAF50;"><i class="fab fa-x-twitter"></i> X</a>
+        | <a href="https://www.instagram.com/parimalmaity50/" target="_blank" style="color: #4CAF50;"><i class="fab fa-instagram"></i> Instagram</a>
     </footer>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
@@ -768,6 +774,9 @@ RESULTS_HTML = """
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
+        // Form data cache
+        const formDataCache = {{ form_data|tojson }};
+
         // Sign Out
         window.signOut = function () {
             signOut(auth).then(() => {
@@ -784,6 +793,67 @@ RESULTS_HTML = """
             document.getElementById('user-email').textContent = user.email;
         }
 
+        // Navigate Page
+        window.navigatePage = async function(page) {
+            try {
+                const idToken = await auth.currentUser.getIdToken(true);
+                const formData = new FormData();
+                for (const [key, value] of Object.entries(formDataCache)) {
+                    formData.append(key, value);
+                }
+                formData.append('page', page);
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const html = await response.text();
+                document.open();
+                document.write(html);
+                document.close();
+            } catch (error) {
+                console.error('Navigation error:', error.message);
+                alert('Error navigating page: ' + error.message);
+            }
+        };
+
+        // Download Results
+        window.downloadResults = async function() {
+            try {
+                const idToken = await auth.currentUser.getIdToken(true);
+                const response = await fetch('/download', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'college_results.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Download error:', error.message);
+                alert('Error downloading results: ' + error.message);
+            }
+        };
+
         // Auth State Monitor
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -791,6 +861,7 @@ RESULTS_HTML = """
                 updateUserInfo(user);
             } else {
                 console.log("No user signed in.");
+                window.location.href = '/';
             }
         });
     </script>
@@ -825,19 +896,15 @@ def predictor():
     return render_template_string(INDEX_HTML, programs=programs, streams=streams, categories=categories,
                                  quotas=quotas, seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
-@app.route('/predict', methods=['POST', 'GET'])
+@app.route('/predict', methods=['POST'])
 def predict():
     try:
         decoded_token = verify_token()
         logger.debug(f"Authenticated user: {decoded_token.get('email')}")
-        if request.method == 'POST':
-            form_data = request.form.to_dict()
-        else:
-            form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year', 'page']}
-        rank = int(form_data.get('rank', '0'))  # Default to 0 if missing
-        page = int(form_data.get('page', '1'))  # Default to 1 if missing
+        form_data = request.form.to_dict()
+        rank = int(form_data.get('rank', '0'))
+        page = int(form_data.get('page', '1'))
         per_page = 20
-        # Ensure other fields have defaults
         program = form_data.get('program', 'Any')
         stream = form_data.get('stream', 'Any')
         category = form_data.get('category', 'Any')
@@ -845,10 +912,8 @@ def predict():
         seat_type = form_data.get('seat_type', 'Any')
         round = form_data.get('round', 'Any')
         year = form_data.get('year', 'Any')
-        # Validate rank
         if not 1 <= rank <= 1000000:
             raise ValueError("Rank must be between 1 and 1,000,000")
-        # Validate year if not 'Any'
         year_int = int(year) if year != 'Any' and year.isdigit() else None
         logger.debug(f"Input: rank={rank}, program={program}, stream={stream}, category={category}, quota={quota}, seat_type={seat_type}, round={round}, year={year}, page={page}")
         filtered_data = data.copy()
@@ -954,10 +1019,10 @@ def download():
             return send_file('results.csv', as_attachment=True, download_name='college_results.csv')
         else:
             logger.error("No results file found")
-            abort(404, description="No results to download.")
+            abort(404, description="No results to download. Please generate results first.")
     except Exception as e:
         logger.error(f"Error in download: {str(e)}")
-        abort(500, description=f"Error: No results to download. {str(e)}")
+        abort(500, description=f"Error: {str(e)}")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
