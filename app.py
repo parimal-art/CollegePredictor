@@ -26,10 +26,13 @@ load_dotenv()
 if not firebase_admin._apps:
     firebase_credentials = os.environ.get('FIREBASE_CREDENTIALS')
     if firebase_credentials:
-        cred = credentials.Certificate(json.loads(firebase_credentials.replace('\n', '\n')))
-        firebase_admin.initialize_app(cred)
+        try:
+            cred = credentials.Certificate(json.loads(firebase_credentials))
+            firebase_admin.initialize_app(cred)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid FIREBASE_CREDENTIALS format: {str(e)}")
     else:
-        raise ValueError("FIREBASE_CREDENTIALS environment variable not found. Please check your .env file or set the environment variable.")
+        raise ValueError("FIREBASE_CREDENTIALS environment variable not found.")
 
 app = Flask(__name__)
 
