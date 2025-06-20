@@ -1,12 +1,11 @@
 import os
 import time
-import pytz  # Added for Windows timezone support
+import pytz
 from datetime import datetime
 os.environ['TZ'] = 'UTC'
 try:
-    time.tzset()  # Works on Unix
+    time.tzset()
 except AttributeError:
-    # Windows doesn't have tzset, so we'll use pytz
     pass
 
 import json
@@ -22,7 +21,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize Firebase Admin SDK using environment variable
+# Initialize Firebase Admin SDK
 if not firebase_admin._apps:
     firebase_credentials = os.environ.get('FIREBASE_CREDENTIALS')
     if firebase_credentials:
@@ -48,10 +47,13 @@ data['Seat Type'] = data['Seat Type'].fillna('Unknown')
 data['Program'] = data['Program'].fillna('Unknown')
 data['Category'] = data['Category'].fillna('Unknown')
 
-# Normalize columns (except Program which we want to keep original)
-for col in ['Institute', 'Category', 'Round', 'Seat Type']:
-    data[col] = data[col].str.strip().str.title().str.replace('  ', ' ').str.replace('&', 'And')
+# Normalize columns
+for col in ['Institute', 'Category', 'Round', 'Seat Type', 'Program']:
+    data[col] = data[col].str.strip().str.title().str.replace(r'\s+', ' ', regex=True).str.replace('&', 'And')
 data['Category'] = data['Category'].str.replace('Obc - A', 'Obc-A').str.replace('Obc - B', 'Obc-B')
+data['Program'] = data['Program'].str.replace(r'\s*&\s*', ' And ', regex=True)  # Standardize '&' to 'And'
+data['Program'] = data['Program'].str.replace(r'\s+', ' ', regex=True)  # Remove extra spaces
+data['Program'] = data['Program'].str.title()  # Ensure consistent title case
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
 
@@ -83,14 +85,13 @@ def verify_token():
     try:
         if id_token.startswith('Bearer '):
             id_token = id_token.split(' ')[1]
-        # Set clock skew tolerance to 60 seconds (maximum allowed)
         decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=60)
         return decoded_token
     except Exception as e:
         logger.error(f"Token verification failed: {str(e)}")
         abort(401, description=f"Unauthorized: Invalid token - {str(e)}")
 
-# HTML templates (same as before)
+# HTML templates
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -496,7 +497,6 @@ INDEX_HTML = """
 </html>
 """
 
-
 RESULTS_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -724,7 +724,6 @@ RESULTS_HTML = """
 </body>
 </html>
 """
-
 
 @app.route('/')
 def home():
