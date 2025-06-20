@@ -1,4 +1,14 @@
 import os
+import time
+import pytz  # Added for Windows timezone support
+from datetime import datetime
+os.environ['TZ'] = 'UTC'
+try:
+    time.tzset()  # Works on Unix
+except AttributeError:
+    # Windows doesn't have tzset, so we'll use pytz
+    pass
+
 import json
 import pandas as pd
 import firebase_admin
@@ -7,12 +17,19 @@ from flask import Flask, request, render_template_string, send_file, abort
 import logging
 import re
 import urllib.parse
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize Firebase Admin SDK using environment variable
 if not firebase_admin._apps:
-    firebase_credentials = json.loads(os.environ.get('FIREBASE_CREDENTIALS').replace('\n', '\n'))
-    cred = credentials.Certificate(firebase_credentials)
-    firebase_admin.initialize_app(cred)
+    firebase_credentials = os.environ.get('FIREBASE_CREDENTIALS')
+    if firebase_credentials:
+        cred = credentials.Certificate(json.loads(firebase_credentials.replace('\n', '\n')))
+        firebase_admin.initialize_app(cred)
+    else:
+        raise ValueError("FIREBASE_CREDENTIALS environment variable not found. Please check your .env file or set the environment variable.")
 
 app = Flask(__name__)
 
@@ -25,26 +42,29 @@ data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
-data['Stream'] = data['Stream'].fillna('Unknown')
 data['Program'] = data['Program'].fillna('Unknown')
 data['Category'] = data['Category'].fillna('Unknown')
 
-# Normalize columns
-for col in ['Program', 'Institute', 'Category', 'Quota', 'Round', 'Seat Type']:
+# Normalize columns (except Program which we want to keep original)
+for col in ['Institute', 'Category', 'Round', 'Seat Type']:
     data[col] = data[col].str.strip().str.title().str.replace('  ', ' ').str.replace('&', 'And')
-data['Stream'] = data['Stream'].str.strip().str.replace(r'[./]', '/', regex=True).str.replace('  ', ' ').str.title()
 data['Category'] = data['Category'].str.replace('Obc - A', 'Obc-A').str.replace('Obc - B', 'Obc-B')
-data['Program'] = data['Program'].str.replace(r'\s*\(.*\)', '', regex=True)
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
+
+# Get unique values for filters
+programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
+categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
+seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
+rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
+years = sorted([x for x in data['Year'].unique() if x != 0])
 
 # Verify data
 logger.debug(f"Columns: {data.columns.tolist()}")
 logger.debug(f"Unique Years: {data['Year'].unique()}")
 logger.debug(f"Unique Seat Types: {data['Seat Type'].unique()}")
 logger.debug(f"Unique Categories: {data['Category'].unique()}")
-logger.debug(f"Unique Programs: {data['Program'].unique()}")
-logger.debug(f"Unique Streams: {data['Stream'].unique()}")
+logger.debug(f"Unique Programs: {programs}")
 
 # Email validation function (only Gmail addresses)
 def is_valid_gmail(email):
@@ -60,13 +80,14 @@ def verify_token():
     try:
         if id_token.startswith('Bearer '):
             id_token = id_token.split(' ')[1]
-        decoded_token = auth.verify_id_token(id_token)
+        # Set clock skew tolerance to 60 seconds (maximum allowed)
+        decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=60)
         return decoded_token
     except Exception as e:
         logger.error(f"Token verification failed: {str(e)}")
         abort(401, description=f"Unauthorized: Invalid token - {str(e)}")
 
-# HTML templates
+# HTML templates (same as before)
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -78,182 +99,26 @@ INDEX_HTML = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #e0f7fa, #ffffff);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            margin: 0;
-        }
-        .header {
-            background-color: #4CAF50;
-            color: white;
-            padding: 1.5rem;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            font-size: 1.25rem;
-        }
-        .form-container {
-            max-width: 600px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-        }
-        .form-container:hover {
-            transform: translateY(-5px);
-        }
-        .form-label {
-            font-weight: 600;
-            color: #333;
-            font-size: 1.1rem;
-        }
-        .form-control {
-            border-radius: 10px;
-            border: 2px solid #e0e0e0;
-            transition: border-color 0.3s;
-            font-size: 1rem;
-            padding: 0.75rem;
-            min-height: 44px;
-            width: 100%;
-        }
-        .form-control:focus {
-            border-color: #4CAF50;
-            box-shadow: 0 0 5px rgba(76,175,80,0.3);
-        }
-        .btn-primary {
-            background-color: #4CAF50;
-            border-color: #4CAF50;
-            border-radius: 10px;
-            padding: 0.75rem;
-            font-weight: 600;
-            font-size: 1rem;
-            min-height: 44px;
-            width: 100%;
-            transition: background-color 0.3s;
-        }
-        .btn-primary:hover {
-            background-color: #45a049;
-        }
-        .spinner {
-            display: none;
-            text-align: center;
-            margin-top: 1rem;
-        }
-        .spinner img {
-            width: 30px;
-        }
-        footer {
-            margin-top: auto;
-            background-color: #333;
-            color: white;
-            text-align: center;
-            padding: 1.5rem;
-            font-size: 0.9rem;
-        }
-        footer a {
-            margin: 0 0.5rem;
-            color: #4CAF50;
-            text-decoration: none;
-        }
-        .auth-container {
-            display: none;
-            max-width: 400px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        .auth-container.active {
-            display: block;
-        }
-        .error-message {
-            color: #dc3545;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-            display: none;
-        }
-        .success-message {
-            color: #28a745;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-            display: none;
-        }
-        @media (max-width: 576px) {
-            .header {
-                font-size: 1rem;
-                padding: 0.75rem;
-            }
-            .form-container, .auth-container {
-                max-width: 100%;
-                margin: 0.5rem;
-                padding: 1rem;
-            }
-            .form-label {
-                font-size: 0.95rem;
-            }
-            .form-control {
-                font-size: 0.85rem;
-                padding: 0.5rem;
-                min-height: 40px;
-            }
-            .btn-primary {
-                font-size: 0.85rem;
-                padding: 0.5rem;
-                min-height: 40px;
-            }
-            footer {
-                font-size: 0.75rem;
-                padding: 0.75rem;
-            }
-            footer a {
-                display: block;
-                margin: 0.25rem 0;
-            }
-            h2 {
-                font-size: 1.25rem;
-            }
-        }
-        @media (max-width: 400px) {
-            .header {
-                font-size: 0.9rem;
-                padding: 0.5rem;
-            }
-            .form-container, .auth-container {
-                margin: 0.25rem;
-                padding: 0.75rem;
-            }
-            .form-label {
-                font-size: 0.9rem;
-            }
-            .form-control {
-                font-size: 0.8rem;
-                padding: 0.4rem;
-                min-height: 36px;
-            }
-            .btn-primary {
-                font-size: 0.8rem;
-                padding: 0.4rem;
-                min-height: 36px;
-            }
-            footer {
-                font-size: 0.7rem;
-                padding: 0.5rem;
-            }
-            h2 {
-                font-size: 1.1rem;
-            }
-            .error-message, .success-message {
-                font-size: 0.8rem;
-            }
-        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Poppins', sans-serif; background: linear-gradient(135deg, #e0f7fa, #ffffff); min-height: 100vh; display: flex; flex-direction: column; margin: 0; }
+        .header { background-color: #4CAF50; color: white; padding: 1.5rem; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-size: 1.25rem; }
+        .form-container { max-width: 600px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }
+        .form-container:hover { transform: translateY(-5px); }
+        .form-label { font-weight: 600; color: #333; font-size: 1.1rem; }
+        .form-control { border-radius: 10px; border: 2px solid #e0e0e0; transition: border-color 0.3s; font-size: 1rem; padding: 0.75rem; min-height: 44px; width: 100%; }
+        .form-control:focus { border-color: #4CAF50; box-shadow: 0 0 5px rgba(76,175,80,0.3); }
+        .btn-primary { background-color: #4CAF50; border-color: #4CAF50; border-radius: 10px; padding: 0.75rem; font-weight: 600; font-size: 1rem; min-height: 44px; width: 100%; transition: background-color 0.3s; }
+        .btn-primary:hover { background-color: #45a049; }
+        .spinner { display: none; text-align: center; margin-top: 1rem; }
+        .spinner img { width: 30px; }
+        footer { margin-top: auto; background-color: #333; color: white; text-align: center; padding: 1.5rem; font-size: 0.9rem; }
+        footer a { margin: 0 0.5rem; color: #4CAF50; text-decoration: none; }
+        .auth-container { display: none; max-width: 400px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .auth-container.active { display: block; }
+        .error-message { color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; display: none; }
+        .success-message { color: #28a745; font-size: 0.9rem; margin-top: 0.5rem; display: none; }
+        @media (max-width: 576px) { .header { font-size: 1rem; padding: 0.75rem; } .form-container, .auth-container { max-width: 100%; margin: 0.5rem; padding: 1rem; } .form-label { font-size: 0.95rem; } .form-control { font-size: 0.85rem; padding: 0.5rem; min-height: 40px; } .btn-primary { font-size: 0.85rem; padding: 0.5rem; min-height: 40px; } footer { font-size: 0.75rem; padding: 0.75rem; } footer a { display: block; margin: 0.25rem 0; } h2 { font-size: 1.25rem; } }
+        @media (max-width: 400px) { .header { font-size: 0.9rem; padding: 0.5rem; } .form-container, .auth-container { margin: 0.25rem; padding: 0.75rem; } .form-label { font-size: 0.9rem; } .form-control { font-size: 0.8rem; padding: 0.4rem; min-height: 36px; } .btn-primary { font-size: 0.8rem; padding: 0.4rem; min-height: 36px; } footer { font-size: 0.7rem; padding: 0.5rem; } h2 { font-size: 1.1rem; } .error-message, .success-message { font-size: 0.8rem; } }
     </style>
 </head>
 <body>
@@ -336,29 +201,11 @@ INDEX_HTML = """
                 </select>
             </div>
             <div class="mb-3">
-                <label class="form-label" for="stream">Stream</label>
-                <select class="form-control" id="stream" name="stream">
-                    <option value="Any" {% if form_data.get('stream') == 'Any' %}selected{% endif %}>Any</option>
-                    {% for stream in streams %}
-                        <option value="{{ stream }}" {% if form_data.get('stream') == stream %}selected{% endif %}>{{ stream }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
                 <label class="form-label" for="category">Category</label>
                 <select class="form-control" id="category" name="category">
                     <option value="Any" {% if form_data.get('category') == 'Any' %}selected{% endif %}>Any</option>
                     {% for category in categories %}
                         <option value="{{ category }}" {% if form_data.get('category') == category %}selected{% endif %}>{{ category }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="form-label" for="quota">Quota</label>
-                <select class="form-control" id="quota" name="quota">
-                    <option value="Any" {% if form_data.get('quota') == 'Any' %}selected{% endif %}>Any</option>
-                    {% for quota in quotas %}
-                        <option value="{{ quota }}" {% if form_data.get('quota') == quota %}selected{% endif %}>{{ quota }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -427,16 +274,13 @@ INDEX_HTML = """
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
-        // Store form data globally for pagination
         let formDataCache = {};
 
-        // Toggle Password
         window.togglePassword = function (id) {
             const input = document.getElementById(id);
             input.type = input.type === "password" ? "text" : "password";
         };
 
-        // Form Switch
         window.showLogin = function () {
             document.getElementById('login-form').classList.add('active');
             document.getElementById('signup-form').classList.remove('active');
@@ -466,7 +310,6 @@ INDEX_HTML = """
             hideErrors();
         };
 
-        // Hide error and success messages
         function hideErrors() {
             document.getElementById('login-email-error').style.display = 'none';
             document.getElementById('signup-email-error').style.display = 'none';
@@ -475,7 +318,6 @@ INDEX_HTML = """
             document.getElementById('reset-email-success').style.display = 'none';
         }
 
-        // Signup
         document.getElementById('signup-email-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('signup-email').value;
@@ -506,7 +348,6 @@ INDEX_HTML = """
             }
         });
 
-        // Login
         document.getElementById('login-email-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
@@ -544,7 +385,6 @@ INDEX_HTML = """
             }
         });
 
-        // Reset Password
         document.getElementById('reset-password-email-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('reset-email').value;
@@ -576,7 +416,6 @@ INDEX_HTML = """
             }
         });
 
-        // Sign Out
         window.signOut = function () {
             signOut(auth).then(() => {
                 console.log('User signed out');
@@ -587,13 +426,11 @@ INDEX_HTML = """
             });
         };
 
-        // Update User Info
         function updateUserInfo(user) {
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('user-email').textContent = user.email;
         }
 
-        // Auth State Monitor
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log("User signed in:", user.email);
@@ -609,7 +446,6 @@ INDEX_HTML = """
             }
         });
 
-        // Predict form submission
         document.getElementById('predict-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             document.querySelector('.spinner').style.display = 'block';
@@ -645,7 +481,6 @@ INDEX_HTML = """
             }
         });
 
-        // Gmail validation function
         function isValidGmail(email) {
             const gmailPattern = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
             return gmailPattern.test(email);
@@ -658,6 +493,7 @@ INDEX_HTML = """
 </html>
 """
 
+
 RESULTS_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -669,178 +505,24 @@ RESULTS_HTML = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #e0f7fa, #ffffff);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            margin: 0;
-        }
-        .header {
-            background-color: #4CAF50;
-            color: white;
-            padding: 1.5rem;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            font-size: 1.25rem;
-        }
-        .results-container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-        }
-        .results-container:hover {
-            transform: translateY(-5px);
-        }
-        .table-responsive {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        .table {
-            border-radius: 10px;
-            overflow: hidden;
-            font-size: 1rem;
-            min-width: 600px;
-        }
-        .table th {
-            background-color: #4CAF50;
-            color: white;
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            padding: 0.75rem;
-        }
-        .table td {
-            padding: 0.75rem;
-            vertical-align: middle;
-            white-space: nowrap;
-        }
-        .table tbody tr:hover {
-            background-color: #f1f8e9;
-        }
-        .btn-primary, .btn-success {
-            background-color: #4CAF50;
-            border-color: #4CAF50;
-            border-radius: 10px;
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            min-height: 44px;
-            margin: 0.5rem;
-            transition: background-color 0.3s;
-        }
-        .btn-primary:hover, .btn-success:hover {
-            background-color: #45a049;
-        }
-        .alert {
-            border-radius: 10px;
-            font-size: 1rem;
-            padding: 1rem;
-            word-wrap: break-word;
-        }
-        .pagination {
-            margin-top: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        footer {
-            margin-top: auto;
-            background-color: #333;
-            color: white;
-            text-align: center;
-            padding: 1.5rem;
-            font-size: 0.9rem;
-        }
-        footer a {
-            margin: 0 0.5rem;
-            color: #4CAF50;
-            text-decoration: none;
-        }
-        @media (max-width: 576px) {
-            .header {
-                font-size: 1rem;
-                padding: 0.75rem;
-            }
-            .results-container {
-                max-width: 100%;
-                margin: 0.5rem;
-                padding: 1rem;
-            }
-            .table {
-                font-size: 0.8rem;
-                min-width: 600px;
-            }
-            .table th, .table td {
-                padding: 0.4rem;
-            }
-            .btn-primary, .btn-success {
-                font-size: 0.85rem;
-                padding: 0.5rem 1rem;
-                min-height: 40px;
-                margin: 0.25rem;
-            }
-            .alert {
-                font-size: 0.85rem;
-                padding: 0.75rem;
-            }
-            footer {
-                font-size: 0.75rem;
-                padding: 0.75rem;
-            }
-            footer a {
-                display: block;
-                margin: 0.25rem 0;
-            }
-            h2 {
-                font-size: 1.25rem;
-            }
-            .pagination {
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-        }
-        @media (max-width: 400px) {
-            .header {
-                font-size: 0.9rem;
-                padding: 0.5rem;
-            }
-            .results-container {
-                margin: 0.25rem;
-                padding: 0.75rem;
-            }
-            .table {
-                font-size: 0.75rem;
-                min-width: 600px;
-            }
-            .table th, .table td {
-                padding: 0.3rem;
-            }
-            .btn-primary, .btn-success {
-                font-size: 0.8rem;
-                padding: 0.4rem 0.8rem;
-                min-height: 36px;
-            }
-            .alert {
-                font-size: 0.8rem;
-                padding: 0.5rem;
-            }
-            footer {
-                font-size: 0.7rem;
-                padding: 0.5rem;
-            }
-            h2 {
-                font-size: 1.1rem;
-            }
-        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Poppins', sans-serif; background: linear-gradient(135deg, #e0f7fa, #ffffff); min-height: 100vh; display: flex; flex-direction: column; margin: 0; }
+        .header { background-color: #4CAF50; color: white; padding: 1.5rem; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-size: 1.25rem; }
+        .results-container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }
+        .results-container:hover { transform: translateY(-5px); }
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table { border-radius: 10px; overflow: hidden; font-size: 1rem; min-width: 600px; }
+        .table th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index: 1; padding: 0.75rem; }
+        .table td { padding: 0.75rem; vertical-align: middle; white-space: nowrap; }
+        .table tbody tr:hover { background-color: #f1f8e9; }
+        .btn-primary, .btn-success { background-color: #4CAF50; border-color: #4CAF50; border-radius: 10px; padding: 0.75rem 1.5rem; font-size: 1rem; min-height: 44px; margin: 0.5rem; transition: background-color 0.3s; }
+        .btn-primary:hover, .btn-success:hover { background-color: #45a049; }
+        .alert { border-radius: 10px; font-size: 1rem; padding: 1rem; word-wrap: break-word; }
+        .pagination { margin-top: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        footer { margin-top: auto; background-color: #333; color: white; text-align: center; padding: 1.5rem; font-size: 0.9rem; }
+        footer a { margin: 0 0.5rem; color: #4CAF50; text-decoration: none; }
+        @media (max-width: 576px) { .header { font-size: 1rem; padding: 0.75rem; } .results-container { max-width: 100%; margin: 0.5rem; padding: 1rem; } .table { font-size: 0.8rem; min-width: 600px; } .table th, .table td { padding: 0.4rem; } .btn-primary, .btn-success { font-size: 0.85rem; padding: 0.5rem 1rem; min-height: 40px; margin: 0.25rem; } .alert { font-size: 0.85rem; padding: 0.75rem; } footer { font-size: 0.75rem; padding: 0.75rem; } footer a { display: block; margin: 0.25rem 0; } h2 { font-size: 1.25rem; } .pagination { flex-direction: column; gap: 0.5rem; } }
+        @media (max-width: 400px) { .header { font-size: 0.9rem; padding: 0.5rem; } .results-container { margin: 0.25rem; padding: 0.75rem; } .table { font-size: 0.75rem; min-width: 600px; } .table th, .table td { padding: 0.3rem; } .btn-primary, .btn-success { font-size: 0.8rem; padding: 0.4rem 0.8rem; min-height: 36px; } .alert { font-size: 0.8rem; padding: 0.5rem; } footer { font-size: 0.7rem; padding: 0.5rem; } h2 { font-size: 1.1rem; } }
     </style>
 </head>
 <body>
@@ -872,7 +554,6 @@ RESULTS_HTML = """
                             <th>Program</th>
                             <th>Round</th>
                             <th>Category</th>
-                            <th>Quota</th>
                             <th>Seat Type</th>
                             <th>Opening Rank</th>
                             <th>Closing Rank</th>
@@ -886,7 +567,6 @@ RESULTS_HTML = """
                                 <td>{{ result['Program'] }}</td>
                                 <td>{{ result['Round'] }}</td>
                                 <td>{{ result['Category'] }}</td>
-                                <td>{{ result['Quota'] }}</td>
                                 <td>{{ result['Seat Type'] }}</td>
                                 <td>{{ result['Opening Rank'] }}</td>
                                 <td>{{ result['Closing Rank'] }}</td>
@@ -912,7 +592,7 @@ RESULTS_HTML = """
             <p class="mt-2 text-center">Page {{ page }} | Showing {{ results|length }} of {{ total_results }} results</p>
         {% else %}
             <div class="alert alert-warning text-center">
-                No colleges found for your rank and filters. Try relaxing filters like Stream, Program, Category, or Year.
+                No colleges found for your rank and filters. Try relaxing filters like Program, Category, or Year.
             </div>
         {% endif %}
         <div class="text-center mt-4">
@@ -948,10 +628,8 @@ RESULTS_HTML = """
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
-        // Form data cache
         const formDataCache = {{ form_data|tojson }};
 
-        // Sign Out
         window.signOut = function () {
             signOut(auth).then(() => {
                 console.log('User signed out');
@@ -962,13 +640,11 @@ RESULTS_HTML = """
             });
         };
 
-        // Update User Info
         function updateUserInfo(user) {
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('user-email').textContent = user.email;
         }
 
-        // Navigate Page
         window.navigatePage = async function(page) {
             try {
                 const idToken = await auth.currentUser.getIdToken(true);
@@ -1002,7 +678,6 @@ RESULTS_HTML = """
             }
         };
 
-        // Download Results
         window.downloadResults = async function() {
             try {
                 const idToken = await auth.currentUser.getIdToken(true);
@@ -1032,7 +707,6 @@ RESULTS_HTML = """
             }
         };
 
-        // Auth State Monitor
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log("User signed in:", user.email);
@@ -1048,31 +722,18 @@ RESULTS_HTML = """
 </html>
 """
 
+
 @app.route('/')
 def home():
-    programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
-    streams = sorted([x for x in data['Stream'].unique() if pd.notna(x) and x != 'Unknown'])
-    categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
-    quotas = sorted([x for x in data['Quota'].unique() if pd.notna(x)])
-    seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
-    rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
-    years = sorted([x for x in data['Year'].unique() if x != 0])
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year']}
-    return render_template_string(INDEX_HTML, programs=programs, streams=streams, categories=categories,
-                                 quotas=quotas, seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
+    return render_template_string(INDEX_HTML, programs=programs, categories=categories,
+                               seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
 @app.route('/predictor')
 def predictor():
-    programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
-    streams = sorted([x for x in data['Stream'].unique() if pd.notna(x) and x != 'Unknown'])
-    categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
-    quotas = sorted([x for x in data['Quota'].unique() if pd.notna(x)])
-    seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
-    rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
-    years = sorted([x for x in data['Year'].unique() if x != 0])
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'stream', 'category', 'quota', 'seat_type', 'round', 'year']}
-    return render_template_string(INDEX_HTML, programs=programs, streams=streams, categories=categories,
-                                 quotas=quotas, seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
+    return render_template_string(INDEX_HTML, programs=programs, categories=categories,
+                               seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -1084,105 +745,72 @@ def predict():
         page = int(form_data.get('page', '1'))
         per_page = 20
         program = form_data.get('program', 'Any')
-        stream = form_data.get('stream', 'Any')
         category = form_data.get('category', 'Any')
-        quota = form_data.get('quota', 'Any')
         seat_type = form_data.get('seat_type', 'Any')
         round = form_data.get('round', 'Any')
         year = form_data.get('year', 'Any')
+        
         if not 1 <= rank <= 1000000:
             raise ValueError("Rank must be between 1 and 1,000,000")
-        logger.debug(f"Input: rank={rank}, program={program}, stream={stream}, category={category}, quota={quota}, seat_type={seat_type}, round={round}, year={year}, page={page}")
+            
+        logger.debug(f"Input: rank={rank}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}")
+        
         filtered_data = data.copy()
         low_rank_message = None
         min_rank_message = None
         temp_data = filtered_data.copy()
+
+        # Determine the starting closing rank based on rank range
+        if rank < 20000:
+            start_closing_rank = max(1, rank - 5000)
+        elif 20000 <= rank <= 30000:
+            start_closing_rank = 13000
+        elif 30000 <= rank <= 50000:
+            start_closing_rank = 19000
+        else:  # rank > 50000
+            start_closing_rank = 26000
+
+        # Apply filters
         if program != 'Any':
-            logger.debug(f"Applying program filter: {program}")
             temp_data = temp_data[temp_data['Program'] == program]
-            logger.debug(f"After program filter, rows: {len(temp_data)}")
-        if stream != 'Any':
-            logger.debug(f"Applying stream filter: {stream}")
-            temp_data = temp_data[temp_data['Stream'] == stream]
-            logger.debug(f"After stream filter, rows: {len(temp_data)}")
         if category != 'Any':
-            logger.debug(f"Applying category filter: {category}")
             temp_data = temp_data[temp_data['Category'] == category]
-            logger.debug(f"After category filter, rows: {len(temp_data)}")
-        if quota != 'Any':
-            logger.debug(f"Applying quota filter: {quota}")
-            temp_data = temp_data[temp_data['Quota'] == quota]
-            logger.debug(f"After quota filter, rows: {len(temp_data)}")
         if seat_type != 'Any':
-            logger.debug(f"Applying seat_type filter: {seat_type}")
             temp_data = temp_data[temp_data['Seat Type'] == seat_type]
-            logger.debug(f"After seat_type filter, rows: {len(temp_data)}")
         if round != 'Any':
-            logger.debug(f"Applying round filter: {round}")
             temp_data = temp_data[temp_data['Round'] == round]
-            logger.debug(f"After round filter, rows: {len(temp_data)}")
         if year != 'Any':
-            logger.debug(f"Applying year filter: {year}")
             temp_data = temp_data[temp_data['Year'] == int(year)]
-            logger.debug(f"After year filter, rows: {len(temp_data)}")
-        if temp_data.empty or 'Opening Rank' not in temp_data.columns:
-            min_rank_message = "No colleges found for these filters. Try relaxing filters like Stream, Program, Category, or Year."
-            if stream != 'Any':
-                logger.debug(f"Retrying without stream filter: {stream}")
-                temp_data = filtered_data.copy()
-                if program != 'Any':
-                    temp_data = temp_data[temp_data['Program'] == program]
-                if category != 'Any':
-                    temp_data = temp_data[temp_data['Category'] == category]
-                if quota != 'Any':
-                    temp_data = temp_data[temp_data['Quota'] == quota]
-                if seat_type != 'Any':
-                    temp_data = temp_data[temp_data['Seat Type'] == seat_type]
-                if round != 'Any':
-                    temp_data = temp_data[temp_data['Round'] == round]
-                if year != 'Any':
-                    temp_data = temp_data[temp_data['Year'] == int(year)]
-                min_rank_message += f" Showing results without Stream filter."
-            filtered_data = pd.DataFrame(columns=data.columns) if temp_data.empty else temp_data
-            logger.debug("No results after applying filters or missing 'Opening Rank' column")
+
+        # Filter data based on closing rank range
+        if temp_data.empty or 'Closing Rank' not in temp_data.columns:
+            min_rank_message = "No colleges found for these filters. Try relaxing filters like Program, Category, or Year."
+            filtered_data = pd.DataFrame(columns=data.columns)
         else:
-            min_opening_rank = temp_data['Opening Rank'].min()
-            max_opening_rank = temp_data['Opening Rank'].max()
-            logger.debug(f"Min opening rank: {min_opening_rank}, Max opening rank: {max_opening_rank}")
-            filtered_data = temp_data[
-                (temp_data['Opening Rank'] <= rank) &
-                (temp_data['Closing Rank'] >= rank)
-            ]
+            max_closing_rank = temp_data['Closing Rank'].max()
+            filtered_data = temp_data[temp_data['Closing Rank'] >= start_closing_rank]
             if filtered_data.empty:
-                min_rank_message = f"No colleges found for rank {rank}. Showing colleges with opening ranks above or below your rank."
+                min_rank_message = f"No colleges found with closing ranks >= {start_closing_rank} for rank {rank}. Showing all available data."
                 filtered_data = temp_data.copy()
-                filtered_data['Rank_Diff'] = abs(filtered_data['Opening Rank'] - rank)
-                filtered_data = filtered_data.sort_values('Rank_Diff').drop(columns=['Rank_Diff'])
-                logger.debug(f"Showing {len(filtered_data)} colleges with ranks above/below")
-        if not filtered_data.empty and not min_rank_message and len(filtered_data) < 10:
-            low_rank_message = f"Showing additional colleges to provide more options."
-            filtered_data = temp_data.copy()
-            filtered_data['Rank_Diff'] = abs(filtered_data['Opening Rank'] - rank)
-            filtered_data = filtered_data.sort_values('Rank_Diff').drop(columns=['Rank_Diff'])
-            logger.debug(f"Expanded results, rows: {len(filtered_data)}")
-        if min_rank_message or low_rank_message:
-            filtered_data = filtered_data.sort_values('Opening Rank')
-        else:
-            filtered_data = filtered_data.sort_values('Closing Rank')
+
+        # Sort by Closing Rank in ascending order
+        if not filtered_data.empty:
+            filtered_data = filtered_data.sort_values(by='Closing Rank', ascending=True)
+
+        # Save results
         if not filtered_data.empty:
             filtered_data.to_csv('results.csv', index=False)
-        else:
-            logger.warning("No data to save to results.csv")
+
         total_results = len(filtered_data)
         start = (page - 1) * per_page
         end = min(start + per_page, total_results)
-        paginated_results = filtered_data.iloc[start:end][['Institute', 'Program', 'Round', 'Category', 'Quota', 'Seat Type', 'Opening Rank', 'Closing Rank', 'Year']].to_dict('records')
+        paginated_results = filtered_data.iloc[start:end][['Institute', 'Program', 'Round', 'Category', 'Seat Type', 'Opening Rank', 'Closing Rank', 'Year']].to_dict('records')
         has_next = end < total_results
         form_data['page'] = str(page)
-        logger.debug(f"Rendering page {page} with {len(paginated_results)} results, total={total_results}, has_next={has_next}")
+        
         return render_template_string(RESULTS_HTML, results=paginated_results, rank=rank, page=page, has_next=has_next,
-                                     total_results=total_results, form_data=form_data, low_rank_message=low_rank_message,
-                                     min_rank_message=min_rank_message)
+                                   total_results=total_results, form_data=form_data, low_rank_message=low_rank_message,
+                                   min_rank_message=min_rank_message)
     except ValueError as ve:
         logger.error(f"Validation error in predict: {str(ve)}")
         abort(400, description=f"Validation Error: {str(ve)}")
