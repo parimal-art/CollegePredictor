@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.xls')
+data = pd.read_csv('wbjee_final_clean.csv')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
