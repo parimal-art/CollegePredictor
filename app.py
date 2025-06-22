@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.csv')
+data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -112,8 +112,9 @@ INDEX_HTML = """
         .form-container { max-width: 600px; margin: 2rem auto; padding: 2rem; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }
         .form-container:hover { transform: translateY(-5px); }
         .form-label { font-weight: 600; color: #333; font-size: 1.1rem; }
-        .form-control { border-radius: 10px; border: 2px solid #e0e0e0; transition: border-color 0.3s; font-size: 1rem; padding: 0.75rem; min-height: 44px; width: 100%; }
+        .form-control { border-radius: 10px; border: 2px solid #666; transition: border-color 0.3s; font-size: 1rem; padding: 0.75rem; min-height: 44px; width: 100%; }
         .form-control:focus { border-color: #4CAF50; box-shadow: 0 0 5px rgba(76,175,80,0.3); }
+        .form-control:disabled { background-color: #e9ecef; opacity: 0.65; cursor: not-allowed; }
         .btn-primary { background-color: #4CAF50; border-color: #4CAF50; border-radius: 10px; padding: 0.75rem; font-weight: 600; font-size: 1rem; min-height: 44px; width: 100%; transition: background-color 0.3s; }
         .btn-primary:hover { background-color: #45a049; }
         .spinner { display: none; text-align: center; margin-top: 1rem; }
@@ -315,6 +316,8 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
+            // Check initial program selection on page load
+            toggleCategorySection();
         };
 
         function hideErrors() {
@@ -323,6 +326,20 @@ INDEX_HTML = """
             document.getElementById('signup-email-exists-error').style.display = 'none';
             document.getElementById('reset-email-error').style.display = 'none';
             document.getElementById('reset-email-success').style.display = 'none';
+        }
+
+        // Function to toggle category section based on program selection
+        function toggleCategorySection() {
+            const programSelect = document.getElementById('program');
+            const categorySelect = document.getElementById('category');
+            const selectedProgram = programSelect.value.toLowerCase();
+            
+            if (selectedProgram.endsWith('-tfw') || selectedProgram.includes('(tfw)')) {
+                categorySelect.disabled = true;
+                categorySelect.value = 'Any'; // Reset to 'Any' when disabled
+            } else {
+                categorySelect.disabled = false;
+            }
         }
 
         document.getElementById('signup-email-form').addEventListener('submit', async (e) => {
@@ -487,6 +504,9 @@ INDEX_HTML = """
                 document.querySelector('.btn-primary').disabled = false;
             }
         });
+
+        // Add event listener for program selection to toggle category section
+        document.getElementById('program').addEventListener('change', toggleCategorySection);
 
         function isValidGmail(email) {
             const gmailPattern = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
