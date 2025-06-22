@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.csv')
+data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -57,7 +57,6 @@ data['Program'] = data['Program'].str.title()  # Ensure consistent title case
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
 
-# Exclude 'Tution Fee Weaver' from categories (keeping it as an option for selection)
 # Get unique values for filters
 programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
 categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
@@ -368,11 +367,15 @@ INDEX_HTML = """
             // Clear existing options
             programSelect.innerHTML = '<option value="Any">Any</option>';
 
-            // Filter programs
+            // Filter programs based on category
             const filteredPrograms = originalPrograms.filter(program => {
                 const programLower = program.trim().toLowerCase();
                 const isTFW = programLower.endsWith('-tfw') || programLower.endsWith('- tfw') || programLower.includes('(tfw)');
-                return !(isTFW && selectedCategory !== 'Tution Fee Weaver');
+                if (selectedCategory === 'Tution Fee Weaver') {
+                    return isTFW; // Show only TFW programs
+                } else {
+                    return !isTFW; // Exclude TFW programs for other categories
+                }
             });
 
             // Populate filtered programs
@@ -667,6 +670,12 @@ RESULTS_HTML = """
                 </div>
             </div>
             <p class="mt-2 text-center">Page {{ page }} | Showing {{ results|length }} of {{ total_results }} results</p>
+            {% if form_data.get('category') and form_data.get('category') != 'Any' and form_data.get('category') != 'Tution Fee Weaver' %}
+                <div class="mt-3 text-center">
+                    <input type="checkbox" id="filterCategoryOnly" name="filterCategoryOnly" onchange="filterCategoryOnly()">
+                    <label for="filterCategoryOnly">Want to see {{ form_data.get('category') }} results only?</label>
+                </div>
+            {% endif %}
         {% else %}
             <div class="alert alert-warning text-center">
                 No colleges found for your rank and filters. Try relaxing filters like Program, Category, or Year.
@@ -785,6 +794,14 @@ RESULTS_HTML = """
             }
         };
 
+        window.filterCategoryOnly = function() {
+            const checkbox = document.getElementById('filterCategoryOnly');
+            if (checkbox.checked) {
+                const category = formDataCache.category;
+                window.location.href = `/predict?rank=${encodeURIComponent(formDataCache.rank)}&category=${encodeURIComponent(category)}&program=Any&seat_type=Any&round=Any&year=Any`;
+            }
+        };
+
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log("User signed in:", user.email);
@@ -812,12 +829,12 @@ def predictor():
     return render_template_string(INDEX_HTML, programs=programs, categories=categories,
                                seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
-@app.route('/predict', methods=['POST'])
+@app.route('/predict', methods=['POST', 'GET'])
 def predict():
     try:
         decoded_token = verify_token()
         logger.debug(f"Authenticated user: {decoded_token.get('email')}")
-        form_data = request.form.to_dict()
+        form_data = request.form.to_dict() if request.method == 'POST' else {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
         rank = int(form_data.get('rank', '0'))
         page = int(form_data.get('page', '1'))
         per_page = 20
@@ -850,8 +867,10 @@ def predict():
         # Apply filters
         if program != 'Any':
             temp_data = temp_data[temp_data['Program'] == program]
-        if category != 'Any':
+        if category != 'Any' and not ('filterCategoryOnly' in request.args or 'filterCategoryOnly' in request.form):
             temp_data = temp_data[temp_data['Category'].isin([category, 'Open'])]
+        elif category != 'Any':
+            temp_data = temp_data[temp_data['Category'] == category]
         if seat_type != 'Any':
             temp_data = temp_data[temp_data['Seat Type'] == seat_type]
         if round != 'Any':
