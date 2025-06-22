@@ -210,7 +210,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="category">Category</label>
-                <select class="form-control" id="category" name="category">
+                <select class="form-control" id="category" name="category" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
                     <option value="Any" {% if form_data.get('category') == 'Any' %}selected{% endif %}>Any</option>
                     {% for category in categories %}
                         <option value="{{ category }}" {% if form_data.get('category') == category %}selected{% endif %}>{{ category }}</option>
@@ -219,7 +219,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="seat_type">Seat Type</label>
-                <select class="form-control" id="seat_type" name="seat_type">
+                <select class="form-control" id="seat_type" name="seat_type" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
                     <option value="Any" {% if form_data.get('seat_type') == 'Any' %}selected{% endif %}>Any</option>
                     {% for seat_type in seat_types %}
                         <option value="{{ seat_type }}" {% if form_data.get('seat_type') == seat_type %}selected{% endif %}>{{ seat_type }}</option>
@@ -228,7 +228,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="round">Round</label>
-                <select class="form-control" id="round" name="round">
+                <select class="form-control" id="round" name="round" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
                     <option value="Any" {% if form_data.get('round') == 'Any' %}selected{% endif %}>Any</option>
                     {% for round in rounds %}
                         <option value="{{ round }}" {% if form_data.get('round') == round %}selected{% endif %}>{{ round }}</option>
@@ -237,7 +237,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="year">Year</label>
-                <select class="form-control" id="year" name="year">
+                <select class="form-control" id="year" name="year" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
                     <option value="Any" {% if form_data.get('year') == 'Any' %}selected{% endif %}>Any</option>
                     {% for year in years %}
                         <option value="{{ year }}" {% if form_data.get('year') == year|string %}selected{% endif %}>{{ year }}</option>
@@ -295,7 +295,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'none';
             hideErrors();
-            document.getElementById('user-info').style.display = 'none'; // Ensure user info is hidden on login view
+            document.getElementById('user-info').style.display = 'none';
         };
         window.showSignup = function () {
             document.getElementById('login-form').classList.remove('active');
@@ -303,7 +303,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'none';
             hideErrors();
-            document.getElementById('user-info').style.display = 'none'; // Ensure user info is hidden on signup view
+            document.getElementById('user-info').style.display = 'none';
         };
         window.showResetPassword = function () {
             document.getElementById('login-form').classList.remove('active');
@@ -311,7 +311,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.add('active');
             document.getElementById('predictor-form').style.display = 'none';
             hideErrors();
-            document.getElementById('user-info').style.display = 'none'; // Ensure user info is hidden on reset view
+            document.getElementById('user-info').style.display = 'none';
         };
         window.showPredictor = function () {
             document.getElementById('login-form').classList.remove('active');
@@ -319,7 +319,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
-            // Check initial program selection on page load
+            toggleDependentFields();
             toggleCategorySection();
         };
 
@@ -331,6 +331,28 @@ INDEX_HTML = """
             document.getElementById('reset-email-success').style.display = 'none';
         }
 
+        // Function to toggle dependent fields (Category, Seat Type, Round, Year) based on Rank and Program
+        function toggleDependentFields() {
+            const rankInput = document.getElementById('rank');
+            const programSelect = document.getElementById('program');
+            const dependentFields = [
+                document.getElementById('category'),
+                document.getElementById('seat_type'),
+                document.getElementById('round'),
+                document.getElementById('year')
+            ];
+
+            const isRankValid = rankInput.value && parseInt(rankInput.value) >= 1 && parseInt(rankInput.value) <= 1000000;
+            const isProgramSelected = programSelect.value && programSelect.value !== 'Any';
+
+            dependentFields.forEach(field => {
+                field.disabled = !(isRankValid && isProgramSelected);
+                if (field.disabled && field.id === 'category') {
+                    field.value = 'Any'; // Reset category to 'Any' when disabled
+                }
+            });
+        }
+
         // Function to toggle category section based on program selection
         function toggleCategorySection() {
             const programSelect = document.getElementById('program');
@@ -340,7 +362,7 @@ INDEX_HTML = """
             if (selectedProgram.endsWith('-tfw') || selectedProgram.includes('(tfw)')) {
                 categorySelect.disabled = true;
                 categorySelect.value = 'Any'; // Reset to 'Any' when disabled
-            } else {
+            } else if (!categorySelect.disabled) {
                 categorySelect.disabled = false;
             }
         }
@@ -447,7 +469,7 @@ INDEX_HTML = """
             signOut(auth).then(() => {
                 console.log('User signed out');
                 window.location.href = '/';
-                document.getElementById('user-info').style.display = 'none'; // Hide user info on sign out
+                document.getElementById('user-info').style.display = 'none';
             }).catch((error) => {
                 console.error('Sign out failed:', error.message);
                 alert('Sign out failed: ' + error.message);
@@ -470,7 +492,7 @@ INDEX_HTML = """
                 }
             } else {
                 console.log("No user signed in.");
-                document.getElementById('user-info').style.display = 'none'; // Hide user info when no user is signed in
+                document.getElementById('user-info').style.display = 'none';
                 showLogin();
             }
         });
@@ -510,7 +532,9 @@ INDEX_HTML = """
             }
         });
 
-        // Add event listener for program selection to toggle category section
+        // Add event listeners for Rank and Program changes
+        document.getElementById('rank').addEventListener('input', toggleDependentFields);
+        document.getElementById('program').addEventListener('change', toggleDependentFields);
         document.getElementById('program').addEventListener('change', toggleCategorySection);
 
         function isValidGmail(email) {
@@ -627,7 +651,7 @@ RESULTS_HTML = """
             </div>
         {% endif %}
         <div class="text-center mt-4">
-            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
+            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' and key != 'category' %}&{{ key }}={{ value|urlencode }}{% endfor %}&category=Any" class="btn btn-success">Back to Home</a>
         </div>
     </div>
     <footer>
@@ -665,7 +689,7 @@ RESULTS_HTML = """
             signOut(auth).then(() => {
                 console.log('User signed out');
                 window.location.href = '/';
-                document.getElementById('user-info').style.display = 'none'; // Hide user info on sign out
+                document.getElementById('user-info').style.display = 'none';
             }).catch((error) => {
                 console.error('Sign out failed:', error.message);
                 alert('Sign out failed: ' + error.message);
@@ -745,7 +769,7 @@ RESULTS_HTML = """
                 updateUserInfo(user);
             } else {
                 console.log("No user signed in.");
-                document.getElementById('user-info').style.display = 'none'; // Hide user info when no user is signed in
+                document.getElementById('user-info').style.display = 'none';
             }
         });
     </script>
