@@ -498,18 +498,17 @@ INDEX_HTML = """
 
             let availablePrograms = [];
             if (isTfw) {
-                // Show only TFW programs
-                availablePrograms = tfwPrograms;
+                // Show only TFW programs with "- Tfw" suffix
+                availablePrograms = tfwPrograms.map(prog => prog.replace(' - Tfw', ''));
             } else {
-                // Show non-TFW programs
+                // Show non-TFW programs without "- Tfw" suffix
                 availablePrograms = nonTfwPrograms;
             }
 
-            // Filter programs based on stream (simplified; assumes programs are associated with streams in dataset)
             availablePrograms.forEach(program => {
                 const option = document.createElement('option');
                 option.value = isTfw ? program + ' - Tfw' : program;
-                option.textContent = isTfw ? program + ' - Tfw' : program;
+                option.textContent = program; // Display only the base name
                 if (programSelect.value === option.value) {
                     option.selected = true;
                 }
