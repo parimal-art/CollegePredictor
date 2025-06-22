@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.csv')
+data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -369,10 +369,14 @@ INDEX_HTML = """
 
             // Filter programs based on category
             const filteredPrograms = originalPrograms.filter(program => {
-                const programLower = program.trim().toLowerCase();
-                const isTFW = programLower.endsWith('-tfw') || programLower.endsWith('- tfw') || programLower.includes('(tfw)');
+                const programLower = program.toLowerCase().trim();
+                // Check if program ends with -tfw, - tfw, or contains (TFW)
+                const isTFW = programLower.endsWith('-tfw') || 
+                              programLower.endsWith('- tfw') || 
+                              programLower.includes('(tfw)');
+                
                 if (selectedCategory === 'Tution Fee Weaver') {
-                    return isTFW; // Show only TFW programs
+                    return isTFW; // Show only TFW programs for this category
                 } else {
                     return !isTFW; // Exclude TFW programs for other categories
                 }
