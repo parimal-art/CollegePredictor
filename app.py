@@ -57,12 +57,10 @@ data['Program'] = data['Program'].str.title()  # Ensure consistent title case
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
 
-# Exclude 'Tution Fee Weaver' from categories
-data = data[data['Category'] != 'Tution Fee Weaver']
-
+# Exclude 'Tution Fee Weaver' from categories (keeping it as an option for selection)
 # Get unique values for filters
 programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
-categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown' and x != 'Tution Fee Weaver'])
+categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
 seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
 rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
 years = sorted([x for x in data['Year'].unique() if x != 0])
@@ -200,17 +198,8 @@ INDEX_HTML = """
                 <input type="number" id="rank" name="rank" class="form-control" required min="1" max="1000000" value="{{ form_data.get('rank', '') }}">
             </div>
             <div class="mb-3">
-                <label class="form-label" for="program">Course (Program)</label>
-                <select class="form-control" id="program" name="program">
-                    <option value="Any" {% if form_data.get('program') == 'Any' %}selected{% endif %}>Any</option>
-                    {% for program in programs %}
-                        <option value="{{ program }}" {% if form_data.get('program') == program %}selected{% endif %}>{{ program }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
                 <label class="form-label" for="category">Category</label>
-                <select class="form-control" id="category" name="category" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
+                <select class="form-control" id="category" name="category" onchange="updateProgramOptions()">
                     <option value="Any" {% if form_data.get('category') == 'Any' %}selected{% endif %}>Any</option>
                     {% for category in categories %}
                         <option value="{{ category }}" {% if form_data.get('category') == category %}selected{% endif %}>{{ category }}</option>
@@ -218,8 +207,17 @@ INDEX_HTML = """
                 </select>
             </div>
             <div class="mb-3">
+                <label class="form-label" for="program">Course (Program)</label>
+                <select class="form-control" id="program" name="program" disabled>
+                    <option value="Any" {% if form_data.get('program') == 'Any' %}selected{% endif %}>Any</option>
+                    {% for program in programs %}
+                        <option value="{{ program }}" {% if form_data.get('program') == program %}selected{% endif %}>{{ program }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
                 <label class="form-label" for="seat_type">Seat Type</label>
-                <select class="form-control" id="seat_type" name="seat_type" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
+                <select class="form-control" id="seat_type" name="seat_type" disabled>
                     <option value="Any" {% if form_data.get('seat_type') == 'Any' %}selected{% endif %}>Any</option>
                     {% for seat_type in seat_types %}
                         <option value="{{ seat_type }}" {% if form_data.get('seat_type') == seat_type %}selected{% endif %}>{{ seat_type }}</option>
@@ -228,7 +226,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="round">Round</label>
-                <select class="form-control" id="round" name="round" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
+                <select class="form-control" id="round" name="round" disabled>
                     <option value="Any" {% if form_data.get('round') == 'Any' %}selected{% endif %}>Any</option>
                     {% for round in rounds %}
                         <option value="{{ round }}" {% if form_data.get('round') == round %}selected{% endif %}>{{ round }}</option>
@@ -237,7 +235,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="year">Year</label>
-                <select class="form-control" id="year" name="year" {% if not form_data.get('rank') or not form_data.get('program') or form_data.get('program') == 'Any' %}disabled{% endif %}>
+                <select class="form-control" id="year" name="year" disabled>
                     <option value="Any" {% if form_data.get('year') == 'Any' %}selected{% endif %}>Any</option>
                     {% for year in years %}
                         <option value="{{ year }}" {% if form_data.get('year') == year|string %}selected{% endif %}>{{ year }}</option>
@@ -319,8 +317,8 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
-            toggleDependentFields();
-            toggleCategorySection();
+            updateFormState();
+            updateProgramOptions();
         };
 
         function hideErrors() {
@@ -331,40 +329,64 @@ INDEX_HTML = """
             document.getElementById('reset-email-success').style.display = 'none';
         }
 
-        // Function to toggle dependent fields (Category, Seat Type, Round, Year) based on Rank and Program
-        function toggleDependentFields() {
+        // Function to update form state based on rank and category
+        function updateFormState() {
             const rankInput = document.getElementById('rank');
+            const categorySelect = document.getElementById('category');
             const programSelect = document.getElementById('program');
             const dependentFields = [
-                document.getElementById('category'),
                 document.getElementById('seat_type'),
                 document.getElementById('round'),
                 document.getElementById('year')
             ];
 
             const isRankValid = rankInput.value && parseInt(rankInput.value) >= 1 && parseInt(rankInput.value) <= 1000000;
-            const isProgramSelected = programSelect.value && programSelect.value !== 'Any';
+            const isCategorySelected = categorySelect.value && categorySelect.value !== 'Any';
 
+            programSelect.disabled = !(isRankValid && isCategorySelected);
             dependentFields.forEach(field => {
-                field.disabled = !(isRankValid && isProgramSelected);
-                if (field.disabled && field.id === 'category') {
-                    field.value = 'Any'; // Reset category to 'Any' when disabled
+                field.disabled = !(isRankValid && isCategorySelected);
+            });
+
+            if (programSelect.disabled) {
+                programSelect.value = 'Any';
+            }
+            dependentFields.forEach(field => {
+                if (field.disabled) {
+                    field.value = 'Any';
                 }
             });
         }
 
-        // Function to toggle category section based on program selection
-        function toggleCategorySection() {
-            const programSelect = document.getElementById('program');
+        // Function to update program options based on category
+        function updateProgramOptions() {
             const categorySelect = document.getElementById('category');
-            const selectedProgram = programSelect.value.trim().toLowerCase();
-            
-            if (selectedProgram.endsWith('-tfw') || selectedProgram.endsWith('- tfw') || selectedProgram.includes('(tfw)')) {
-                categorySelect.disabled = true;
-                categorySelect.value = 'Any'; // Reset to 'Any' when TFW program is selected
-            } else if (!categorySelect.disabled && (document.getElementById('rank').value && parseInt(document.getElementById('rank').value) >= 1 && parseInt(document.getElementById('rank').value) <= 1000000) && programSelect.value !== 'Any') {
-                categorySelect.disabled = false;
-            }
+            const programSelect = document.getElementById('program');
+            const originalPrograms = {{ programs|tojson|safe }};
+            const selectedCategory = categorySelect.value;
+
+            // Clear existing options
+            programSelect.innerHTML = '<option value="Any">Any</option>';
+
+            // Filter programs
+            const filteredPrograms = originalPrograms.filter(program => {
+                const programLower = program.trim().toLowerCase();
+                const isTFW = programLower.endsWith('-tfw') || programLower.endsWith('- tfw') || programLower.includes('(tfw)');
+                return !(isTFW && selectedCategory !== 'Tution Fee Weaver');
+            });
+
+            // Populate filtered programs
+            filteredPrograms.forEach(program => {
+                const option = document.createElement('option');
+                option.value = program;
+                option.text = program;
+                if ({{ form_data.get('program', 'Any')|tojson|safe }} === program) {
+                    option.selected = true;
+                }
+                programSelect.appendChild(option);
+            });
+
+            updateFormState(); // Update form state after updating options
         }
 
         document.getElementById('signup-email-form').addEventListener('submit', async (e) => {
@@ -532,10 +554,10 @@ INDEX_HTML = """
             }
         });
 
-        // Add event listeners for Rank and Program changes
-        document.getElementById('rank').addEventListener('input', toggleDependentFields);
-        document.getElementById('program').addEventListener('change', toggleDependentFields);
-        document.getElementById('program').addEventListener('change', toggleCategorySection);
+        // Add event listeners
+        document.getElementById('rank').addEventListener('input', updateFormState);
+        document.getElementById('category').addEventListener('change', updateFormState);
+        document.getElementById('category').addEventListener('change', updateProgramOptions);
 
         function isValidGmail(email) {
             const gmailPattern = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
@@ -651,7 +673,7 @@ RESULTS_HTML = """
             </div>
         {% endif %}
         <div class="text-center mt-4">
-            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' and key != 'category' %}&{{ key }}={{ value|urlencode }}{% endfor %}&category=Any" class="btn btn-success">Back to Home</a>
+            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' and key != 'category' %}&{{ key }}={{ value|urlencode }}{% endfor %}&category={{ form_data.get('category', 'Any')|urlencode }}" class="btn btn-success">Back to Home</a>
         </div>
     </div>
     <footer>
@@ -829,7 +851,6 @@ def predict():
         if program != 'Any':
             temp_data = temp_data[temp_data['Program'] == program]
         if category != 'Any':
-            # Include both the selected category and 'Open'
             temp_data = temp_data[temp_data['Category'].isin([category, 'Open'])]
         if seat_type != 'Any':
             temp_data = temp_data[temp_data['Seat Type'] == seat_type]
