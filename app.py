@@ -357,7 +357,7 @@ INDEX_HTML = """
         function toggleCategorySection() {
             const programSelect = document.getElementById('program');
             const categorySelect = document.getElementById('category');
-            const selectedProgram = programSelect.value.toLowerCase();
+            const selectedProgram = programSelect.value.trim().toLowerCase();
             
             if (selectedProgram.endsWith('-tfw') || selectedProgram.includes('(tfw)')) {
                 categorySelect.disabled = true;
