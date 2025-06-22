@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.csv')
+data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -62,7 +62,7 @@ data = data[data['Category'] != 'Tution Fee Weaver']
 
 # Get unique values for filters
 programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
-categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
+categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown' and x != 'Tution Fee Weaver'])
 seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x != 'Unknown'])
 rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
 years = sorted([x for x in data['Year'].unique() if x != 0])
@@ -295,6 +295,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'none';
             hideErrors();
+            document.getElementById('user-info').style.display = 'none'; // Ensure user info is hidden on login view
         };
         window.showSignup = function () {
             document.getElementById('login-form').classList.remove('active');
@@ -302,6 +303,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'none';
             hideErrors();
+            document.getElementById('user-info').style.display = 'none'; // Ensure user info is hidden on signup view
         };
         window.showResetPassword = function () {
             document.getElementById('login-form').classList.remove('active');
@@ -309,6 +311,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.add('active');
             document.getElementById('predictor-form').style.display = 'none';
             hideErrors();
+            document.getElementById('user-info').style.display = 'none'; // Ensure user info is hidden on reset view
         };
         window.showPredictor = function () {
             document.getElementById('login-form').classList.remove('active');
@@ -444,6 +447,7 @@ INDEX_HTML = """
             signOut(auth).then(() => {
                 console.log('User signed out');
                 window.location.href = '/';
+                document.getElementById('user-info').style.display = 'none'; // Hide user info on sign out
             }).catch((error) => {
                 console.error('Sign out failed:', error.message);
                 alert('Sign out failed: ' + error.message);
@@ -466,6 +470,7 @@ INDEX_HTML = """
                 }
             } else {
                 console.log("No user signed in.");
+                document.getElementById('user-info').style.display = 'none'; // Hide user info when no user is signed in
                 showLogin();
             }
         });
@@ -660,6 +665,7 @@ RESULTS_HTML = """
             signOut(auth).then(() => {
                 console.log('User signed out');
                 window.location.href = '/';
+                document.getElementById('user-info').style.display = 'none'; // Hide user info on sign out
             }).catch((error) => {
                 console.error('Sign out failed:', error.message);
                 alert('Sign out failed: ' + error.message);
@@ -739,7 +745,7 @@ RESULTS_HTML = """
                 updateUserInfo(user);
             } else {
                 console.log("No user signed in.");
-                window.location.href = '/';
+                document.getElementById('user-info').style.display = 'none'; // Hide user info when no user is signed in
             }
         });
     </script>
