@@ -794,11 +794,42 @@ RESULTS_HTML = """
             }
         };
 
-        window.filterCategoryOnly = function() {
+        window.filterCategoryOnly = async function() {
             const checkbox = document.getElementById('filterCategoryOnly');
             if (checkbox.checked) {
-                const category = formDataCache.category;
-                window.location.href = `/predict?rank=${encodeURIComponent(formDataCache.rank)}&category=${encodeURIComponent(category)}&program=Any&seat_type=Any&round=Any&year=Any`;
+                try {
+                    const idToken = await auth.currentUser.getIdToken(true);
+                    const category = formDataCache.category;
+                    const formData = new FormData();
+                    formData.append('rank', formDataCache.rank);
+                    formData.append('category', category);
+                    formData.append('program', 'Any');
+                    formData.append('seat_type', 'Any');
+                    formData.append('round', 'Any');
+                    formData.append('year', 'Any');
+                    formData.append('filterCategoryOnly', 'true');
+
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${idToken}`
+                        },
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+
+                    const html = await response.text();
+                    document.open();
+                    document.write(html);
+                    document.close();
+                } catch (error) {
+                    console.error('Filter error:', error.message);
+                    alert('Error filtering category: ' + error.message);
+                    checkbox.checked = false; // Uncheck if error occurs
+                }
             }
         };
 
@@ -834,7 +865,7 @@ def predict():
     try:
         decoded_token = verify_token()
         logger.debug(f"Authenticated user: {decoded_token.get('email')}")
-        form_data = request.form.to_dict() if request.method == 'POST' else {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
+        form_data = request.form.to_dict() if request.method == 'POST' else {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year', 'filterCategoryOnly']}
         rank = int(form_data.get('rank', '0'))
         page = int(form_data.get('page', '1'))
         per_page = 20
@@ -843,11 +874,12 @@ def predict():
         seat_type = form_data.get('seat_type', 'Any')
         round = form_data.get('round', 'Any')
         year = form_data.get('year', 'Any')
+        filter_category_only = form_data.get('filterCategoryOnly', 'false').lower() == 'true'
         
         if not 1 <= rank <= 1000000:
             raise ValueError("Rank must be between 1 and 1,000,000")
             
-        logger.debug(f"Input: rank={rank}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}")
+        logger.debug(f"Input: rank={rank}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}, filter_category_only={filter_category_only}")
         
         filtered_data = data.copy()
         low_rank_message = None
@@ -867,7 +899,7 @@ def predict():
         # Apply filters
         if program != 'Any':
             temp_data = temp_data[temp_data['Program'] == program]
-        if category != 'Any' and not ('filterCategoryOnly' in request.args or 'filterCategoryOnly' in request.form):
+        if category != 'Any' and not filter_category_only:
             temp_data = temp_data[temp_data['Category'].isin([category, 'Open'])]
         elif category != 'Any':
             temp_data = temp_data[temp_data['Category'] == category]
