@@ -359,7 +359,7 @@ INDEX_HTML = """
             const categorySelect = document.getElementById('category');
             const selectedProgram = programSelect.value.trim().toLowerCase();
             
-            if (selectedProgram.endsWith('-tfw') || selectedProgram.includes('(tfw)')) {
+            if (selectedProgram.endsWith('-tfw') || selectedProgram.endsWith('- tfw') || selectedProgram.includes('(tfw)')) {
                 categorySelect.disabled = true;
                 categorySelect.value = 'Any'; // Reset to 'Any' when TFW program is selected
             } else if (!categorySelect.disabled && (document.getElementById('rank').value && parseInt(document.getElementById('rank').value) >= 1 && parseInt(document.getElementById('rank').value) <= 1000000) && programSelect.value !== 'Any') {
