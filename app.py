@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.xls')
+data = pd.read_csv('wbjee_final_clean.csv')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -56,6 +56,9 @@ data['Program'] = data['Program'].str.replace(r'\s+', ' ', regex=True)  # Remove
 data['Program'] = data['Program'].str.title()  # Ensure consistent title case
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
+
+# Define streams (assuming common WBJEE streams)
+streams = ['Engineering', 'Pharmacy', 'Architecture']
 
 # Get unique values for filters
 programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
@@ -111,8 +114,10 @@ INDEX_HTML = """
         .form-label { font-weight: 600; color: #333; font-size: 1.1rem; }
         .form-control { border-radius: 10px; border: 2px solid #e0e0e0; transition: border-color 0.3s; font-size: 1rem; padding: 0.75rem; min-height: 44px; width: 100%; }
         .form-control:focus { border-color: #4CAF50; box-shadow: 0 0 5px rgba(76,175,80,0.3); }
+        .form-control:disabled { background-color: #f0f0f0; cursor: not-allowed; }
         .btn-primary { background-color: #4CAF50; border-color: #4CAF50; border-radius: 10px; padding: 0.75rem; font-weight: 600; font-size: 1rem; min-height: 44px; width: 100%; transition: background-color 0.3s; }
         .btn-primary:hover { background-color: #45a049; }
+        .btn-primary:disabled { background-color: #cccccc; border-color: #cccccc; cursor: not-allowed; }
         .spinner { display: none; text-align: center; margin-top: 1rem; }
         .spinner img { width: 30px; }
         footer { margin-top: auto; background-color: #333; color: white; text-align: center; padding: 1.5rem; font-size: 0.9rem; }
@@ -196,17 +201,29 @@ INDEX_HTML = """
                 <input type="number" id="rank" name="rank" class="form-control" required min="1" max="1000000" value="{{ form_data.get('rank', '') }}">
             </div>
             <div class="mb-3">
-                <label class="form-label" for="program">Course (Program)</label>
-                <select class="form-control" id="program" name="program">
-                    <option value="Any" {% if form_data.get('program') == 'Any' %}selected{% endif %}>Any</option>
-                    {% for program in programs %}
-                        <option value="{{ program }}" {% if form_data.get('program') == program %}selected{% endif %}>{{ program }}</option>
+                <label class="form-label" for="stream">Stream</label>
+                <select class="form-control" id="stream" name="stream" required>
+                    <option value="" disabled selected>Select Stream</option>
+                    {% for stream in streams %}
+                        <option value="{{ stream }}" {% if form_data.get('stream') == stream %}selected{% endif %}>{{ stream }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
+                <label class="form-label" for="program">Course (Program)</label>
+                <select class="form-control" id="program" name="program" disabled>
+                    <option value="Any" {% if form_data.get('program') == 'Any' %}selected{% endif %}>Any</option>
+                    {% for program in programs %}
+                        {% if program != 'Cloud Computing - Tfw' %}
+                            <option value="{{ program }}" {% if form_data.get('program') == program %}selected{% endif %}>{{ program }}</option>
+                        {% endif %}
+                    {% endfor %}
+                    <option value="Cloud Computing - Tfw" style="display: none;" {% if form_data.get('program') == 'Cloud Computing - Tfw' %}selected{% endif %}>Cloud Computing - Tfw</option>
+                </select>
+            </div>
+            <div class="mb-3">
                 <label class="form-label" for="category">Category</label>
-                <select class="form-control" id="category" name="category">
+                <select class="form-control" id="category" name="category" disabled>
                     <option value="Any" {% if form_data.get('category') == 'Any' %}selected{% endif %}>Any</option>
                     {% for category in categories %}
                         <option value="{{ category }}" {% if form_data.get('category') == category %}selected{% endif %}>{{ category }}</option>
@@ -215,7 +232,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="seat_type">Seat Type</label>
-                <select class="form-control" id="seat_type" name="seat_type">
+                <select class="form-control" id="seat_type" name="seat_type" disabled>
                     <option value="Any" {% if form_data.get('seat_type') == 'Any' %}selected{% endif %}>Any</option>
                     {% for seat_type in seat_types %}
                         <option value="{{ seat_type }}" {% if form_data.get('seat_type') == seat_type %}selected{% endif %}>{{ seat_type }}</option>
@@ -224,7 +241,7 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="round">Round</label>
-                <select class="form-control" id="round" name="round">
+                <select class="form-control" id="round" name="round" disabled>
                     <option value="Any" {% if form_data.get('round') == 'Any' %}selected{% endif %}>Any</option>
                     {% for round in rounds %}
                         <option value="{{ round }}" {% if form_data.get('round') == round %}selected{% endif %}>{{ round }}</option>
@@ -233,14 +250,14 @@ INDEX_HTML = """
             </div>
             <div class="mb-3">
                 <label class="form-label" for="year">Year</label>
-                <select class="form-control" id="year" name="year">
+                <select class="form-control" id="year" name="year" disabled>
                     <option value="Any" {% if form_data.get('year') == 'Any' %}selected{% endif %}>Any</option>
                     {% for year in years %}
                         <option value="{{ year }}" {% if form_data.get('year') == year|string %}selected{% endif %}>{{ year }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary w-100">Predict Colleges</button>
+            <button type="submit" class="btn btn-primary w-100" id="submit-btn" disabled>Predict Colleges</button>
             <div class="spinner">
                 <img src="https://i.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.webp" alt="Loading">
             </div>
@@ -450,10 +467,48 @@ INDEX_HTML = """
             }
         });
 
+        // Enable form fields and submit button when rank and stream are selected
+        const rankInput = document.getElementById('rank');
+        const streamSelect = document.getElementById('stream');
+        const programSelect = document.getElementById('program');
+        const categorySelect = document.getElementById('category');
+        const seatTypeSelect = document.getElementById('seat_type');
+        const roundSelect = document.getElementById('round');
+        const yearSelect = document.getElementById('year');
+        const submitBtn = document.getElementById('submit-btn');
+
+        function updateFormState() {
+            const rankValid = rankInput.value && rankInput.value >= 1 && rankInput.value <= 1000000;
+            const streamSelected = streamSelect.value !== '';
+            const enable = rankValid && streamSelected;
+
+            programSelect.disabled = !enable;
+            categorySelect.disabled = !enable;
+            seatTypeSelect.disabled = !enable;
+            roundSelect.disabled = !enable;
+            yearSelect.disabled = !enable;
+            submitBtn.disabled = !enable;
+
+            // Show/hide Cloud Computing - TFW based on Seat Type
+            const tfwOption = programSelect.querySelector('option[value="Cloud Computing - Tfw"]');
+            if (seatTypeSelect.value === 'Tuition Fee Waiver') {
+                tfwOption.style.display = 'block';
+            } else {
+                tfwOption.style.display = 'none';
+                if (programSelect.value === 'Cloud Computing - Tfw') {
+                    programSelect.value = 'Any';
+                }
+            }
+        }
+
+        rankInput.addEventListener('input', updateFormState);
+        streamSelect.addEventListener('change', updateFormState);
+        seatTypeSelect.addEventListener('change', updateFormState);
+
         document.getElementById('predict-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             document.querySelector('.spinner').style.display = 'block';
-            document.querySelector('.btn-primary').disabled = true;
+            submitBtn.disabled = true;
 
             try {
                 const idToken = await auth.currentUser.getIdToken(true);
@@ -481,7 +536,7 @@ INDEX_HTML = """
                 alert('Error: ' + error.message);
             } finally {
                 document.querySelector('.spinner').style.display = 'none';
-                document.querySelector('.btn-primary').disabled = false;
+                submitBtn.disabled = false;
             }
         });
 
@@ -599,7 +654,7 @@ RESULTS_HTML = """
             </div>
         {% endif %}
         <div class="text-center mt-4">
-            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}{% for key, value in form_data.items() if key != 'rank' %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
+            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}&stream={{ form_data.get('stream', '')|urlencode }}{% for key, value in form_data.items() if key not in ['rank', 'stream'] %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
         </div>
     </div>
     <footer>
@@ -727,15 +782,15 @@ RESULTS_HTML = """
 
 @app.route('/')
 def home():
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'stream', 'program', 'category', 'seat_type', 'round', 'year']}
     return render_template_string(INDEX_HTML, programs=programs, categories=categories,
-                               seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
+                               seat_types=seat_types, rounds=rounds, years=years, streams=streams, form_data=form_data)
 
 @app.route('/predictor')
 def predictor():
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'stream', 'program', 'category', 'seat_type', 'round', 'year']}
     return render_template_string(INDEX_HTML, programs=programs, categories=categories,
-                               seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
+                               seat_types=seat_types, rounds=rounds, years=years, streams=streams, form_data=form_data)
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -744,6 +799,7 @@ def predict():
         logger.debug(f"Authenticated user: {decoded_token.get('email')}")
         form_data = request.form.to_dict()
         rank = int(form_data.get('rank', '0'))
+        stream = form_data.get('stream', '')
         page = int(form_data.get('page', '1'))
         per_page = 20
         program = form_data.get('program', 'Any')
@@ -751,12 +807,14 @@ def predict():
         seat_type = form_data.get('seat_type', 'Any')
         round = form_data.get('round', 'Any')
         year = form_data.get('year', 'Any')
-        
+
+        if not stream:
+            raise ValueError("Stream is required")
         if not 1 <= rank <= 1000000:
             raise ValueError("Rank must be between 1 and 1,000,000")
-            
-        logger.debug(f"Input: rank={rank}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}")
-        
+
+        logger.debug(f"Input: rank={rank}, stream={stream}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}")
+
         filtered_data = data.copy()
         low_rank_message = None
         min_rank_message = None
@@ -776,7 +834,11 @@ def predict():
         if program != 'Any':
             temp_data = temp_data[temp_data['Program'] == program]
         if category != 'Any':
-            temp_data = temp_data[temp_data['Category'] == category]
+            # Include selected category and Open category
+            temp_data = temp_data[temp_data['Category'].isin([category, 'Open'])]
+        else:
+            # If Any, still include Open category explicitly
+            temp_data = temp_data[temp_data['Category'] == 'Open']
         if seat_type != 'Any':
             temp_data = temp_data[temp_data['Seat Type'] == seat_type]
         if round != 'Any':
@@ -809,7 +871,7 @@ def predict():
         paginated_results = filtered_data.iloc[start:end][['Institute', 'Program', 'Round', 'Category', 'Seat Type', 'Opening Rank', 'Closing Rank', 'Year']].to_dict('records')
         has_next = end < total_results
         form_data['page'] = str(page)
-        
+
         return render_template_string(RESULTS_HTML, results=paginated_results, rank=rank, page=page, has_next=has_next,
                                    total_results=total_results, form_data=form_data, low_rank_message=low_rank_message,
                                    min_rank_message=min_rank_message)
