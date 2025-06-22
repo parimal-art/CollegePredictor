@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.csv')
+data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -361,8 +361,8 @@ INDEX_HTML = """
             
             if (selectedProgram.endsWith('-tfw') || selectedProgram.includes('(tfw)')) {
                 categorySelect.disabled = true;
-                categorySelect.value = 'Any'; // Reset to 'Any' when disabled
-            } else if (!categorySelect.disabled) {
+                categorySelect.value = 'Any'; // Reset to 'Any' when TFW program is selected
+            } else if (!categorySelect.disabled && (document.getElementById('rank').value && parseInt(document.getElementById('rank').value) >= 1 && parseInt(document.getElementById('rank').value) <= 1000000) && programSelect.value !== 'Any') {
                 categorySelect.disabled = false;
             }
         }
