@@ -57,16 +57,6 @@ data['Program'] = data['Program'].str.title()  # Ensure consistent title case
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
 
-# Define streams from dataset
-streams = [
-    'B.E/B. Tech',
-    'B. Pharma',
-    'B.E/B.Tech (Jee(Main) Seats)',
-    'B.E/B.Tech/B.Arch (Wbjee) Seats)',
-    'B. Arch (Jee(Main) Seats)',
-    'B.E/B.Tech (Wbjee/Jee(Main) Seats)/B.Arch (Wbjee Seats)'
-]
-
 # Get unique values for filters
 programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
 categories = sorted([x for x in data['Category'].unique() if pd.notna(x) and x != 'Unknown'])
@@ -214,18 +204,12 @@ INDEX_HTML = """
                 <input type="number" id="rank" name="rank" class="form-control" required min="1" max="1000000" value="{{ form_data.get('rank', '') }}">
             </div>
             <div class="mb-3">
-                <label class="form-label" for="stream">Stream</label>
-                <select class="form-control" id="stream" name="stream" required>
-                    <option value="" disabled selected>Select Stream</option>
-                    {% for stream in streams %}
-                        <option value="{{ stream }}" {% if form_data.get('stream') == stream %}selected{% endif %}>{{ stream }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
                 <label class="form-label" for="program">Course (Program)</label>
                 <select class="form-control" id="program" name="program" disabled>
                     <option value="Any" {% if form_data.get('program') == 'Any' %}selected{% endif %}>Any</option>
+                    {% for program in non_tfw_programs %}
+                        <option value="{{ program }}" {% if form_data.get('program') == program %}selected{% endif %}>{{ program }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
@@ -336,7 +320,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
-            updateFormState(); // Ensure form state is updated on page load
+            updateFormState();
         };
 
         function hideErrors() {
@@ -477,7 +461,6 @@ INDEX_HTML = """
 
         // Form state management
         const rankInput = document.getElementById('rank');
-        const streamSelect = document.getElementById('stream');
         const programSelect = document.getElementById('program');
         const categorySelect = document.getElementById('category');
         const seatTypeSelect = document.getElementById('seat_type');
@@ -491,24 +474,15 @@ INDEX_HTML = """
         const tfwPrograms = {{ tfw_programs|tojson }};
 
         function updateProgramOptions() {
-            const selectedStream = streamSelect.value;
             const selectedSeatType = seatTypeSelect.value;
             const isTfw = selectedSeatType === 'Tuition Fee Waiver';
             programSelect.innerHTML = '<option value="Any" ' + (programSelect.value === 'Any' ? 'selected' : '') + '>Any</option>';
 
-            let availablePrograms = [];
-            if (isTfw) {
-                // Show only TFW programs with "- Tfw" suffix
-                availablePrograms = tfwPrograms.map(prog => prog.replace(' - Tfw', ''));
-            } else {
-                // Show non-TFW programs without "- Tfw" suffix
-                availablePrograms = nonTfwPrograms;
-            }
-
+            let availablePrograms = nonTfwPrograms;
             availablePrograms.forEach(program => {
                 const option = document.createElement('option');
                 option.value = isTfw ? program + ' - Tfw' : program;
-                option.textContent = program; // Display only the base name
+                option.textContent = program;
                 if (programSelect.value === option.value) {
                     option.selected = true;
                 }
@@ -521,25 +495,9 @@ INDEX_HTML = """
             }
         }
 
-        function updateSeatTypeOptions() {
-            const selectedStream = streamSelect.value;
-            seatTypeSelect.innerHTML = '<option value="Any" ' + (seatTypeSelect.value === 'Any' ? 'selected' : '') + '>Any</option>';
-            const availableSeatTypes = selectedStream === 'B. Pharma' ? ['Wbjee'] : {{ seat_types|tojson }};
-            availableSeatTypes.forEach(seatType => {
-                const option = document.createElement('option');
-                option.value = seatType;
-                option.textContent = seatType;
-                if (seatTypeSelect.value === seatType) {
-                    option.selected = true;
-                }
-                seatTypeSelect.appendChild(option);
-            });
-        }
-
         function updateFormState() {
             const rankValid = rankInput.value && rankInput.value >= 1 && rankInput.value <= 1000000;
-            const streamSelected = streamSelect.value !== '';
-            const enable = rankValid && streamSelected;
+            const enable = rankValid;
 
             programSelect.disabled = !enable;
             categorySelect.disabled = !enable;
@@ -549,19 +507,13 @@ INDEX_HTML = """
             submitBtn.disabled = !enable;
 
             if (enable) {
-                updateSeatTypeOptions();
                 updateProgramOptions();
             } else {
                 programSelect.innerHTML = '<option value="Any" selected>Any</option>';
-                seatTypeSelect.innerHTML = '<option value="Any" selected>Any</option>';
             }
         }
 
         rankInput.addEventListener('input', updateFormState);
-        streamSelect.addEventListener('change', () => {
-            updateFormState();
-            updateProgramOptions();
-        });
         seatTypeSelect.addEventListener('change', updateProgramOptions);
 
         document.getElementById('predict-form').addEventListener('submit', async function(e) {
@@ -713,7 +665,7 @@ RESULTS_HTML = """
             </div>
         {% endif %}
         <div class="text-center mt-4">
-            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}&stream={{ form_data.get('stream', '')|urlencode }}{% for key, value in form_data.items() if key not in ['rank', 'stream'] %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
+            <a href="/predictor?rank={{ form_data.get('rank', '')|urlencode }}&program={{ form_data.get('program', '')|urlencode }}{% for key, value in form_data.items() if key not in ['rank', 'program'] %}&{{ key }}={{ value|urlencode }}{% endfor %}" class="btn btn-success">Back to Home</a>
         </div>
     </div>
     <footer>
@@ -841,15 +793,15 @@ RESULTS_HTML = """
 
 @app.route('/')
 def home():
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'stream', 'program', 'category', 'seat_type', 'round', 'year']}
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
     return render_template_string(INDEX_HTML, programs=programs, non_tfw_programs=non_tfw_programs, tfw_programs=tfw_programs, categories=categories,
-                               seat_types=seat_types, rounds=rounds, years=years, streams=streams, form_data=form_data)
+                               seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
 @app.route('/predictor')
 def predictor():
-    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'stream', 'program', 'category', 'seat_type', 'round', 'year']}
+    form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'program', 'category', 'seat_type', 'round', 'year']}
     return render_template_string(INDEX_HTML, programs=programs, non_tfw_programs=non_tfw_programs, tfw_programs=tfw_programs, categories=categories,
-                               seat_types=seat_types, rounds=rounds, years=years, streams=streams, form_data=form_data)
+                               seat_types=seat_types, rounds=rounds, years=years, form_data=form_data)
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -858,7 +810,6 @@ def predict():
         logger.debug(f"Authenticated user: {decoded_token.get('email')}")
         form_data = request.form.to_dict()
         rank = int(form_data.get('rank', '0'))
-        stream = form_data.get('stream', '')
         page = int(form_data.get('page', '1'))
         per_page = 20
         program = form_data.get('program', 'Any')
@@ -867,12 +818,10 @@ def predict():
         round = form_data.get('round', 'Any')
         year = form_data.get('year', 'Any')
 
-        if not stream:
-            raise ValueError("Stream is required")
         if not 1 <= rank <= 1000000:
             raise ValueError("Rank must be between 1 and 1,000,000")
 
-        logger.debug(f"Input: rank={rank}, stream={stream}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}")
+        logger.debug(f"Input: rank={rank}, program={program}, category={category}, seat_type={seat_type}, round={round}, year={year}, page={page}")
 
         filtered_data = data.copy()
         low_rank_message = None
@@ -890,16 +839,14 @@ def predict():
             start_closing_rank = 26000
 
         # Apply filters
-        if stream:
-            # Filter programs based on stream (assuming dataset has a mapping; simplified here)
-            temp_data = temp_data[temp_data['Program'].isin([p for p in programs if stream in p or stream == 'B. Pharma' and 'Pharmacy' in p])]
         if program != 'Any':
-            temp_data = temp_data[temp_data['Program'] == program]
+            if seat_type == 'Tuition Fee Waiver':
+                temp_data = temp_data[temp_data['Program'] == program]
+            else:
+                temp_data = temp_data[temp_data['Program'].isin([program, program + ' - Tfw'])]
         if category != 'Any':
-            # Include selected category and Open category
             temp_data = temp_data[temp_data['Category'].isin([category, 'Open'])]
         else:
-            # If Any, include Open category
             temp_data = temp_data[temp_data['Category'] == 'Open']
         if seat_type != 'Any':
             temp_data = temp_data[temp_data['Seat Type'] == seat_type]
