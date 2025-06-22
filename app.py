@@ -40,7 +40,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Load and preprocess data
-data = pd.read_csv('wbjee_final_clean.csv')
+data = pd.read_csv('wbjee_final_clean.xls')
 
 # Handle missing values
 data['Seat Type'] = data['Seat Type'].fillna('Unknown')
@@ -57,8 +57,15 @@ data['Program'] = data['Program'].str.title()  # Ensure consistent title case
 data['Year'] = pd.to_numeric(data['Year'], errors='coerce').fillna(0).astype(int)
 data = data.drop_duplicates()
 
-# Define streams (assuming common WBJEE streams)
-streams = ['Engineering', 'Pharmacy', 'Architecture']
+# Define streams from dataset
+streams = [
+    'B.E/B. Tech',
+    'B. Pharma',
+    'B.E/B.Tech (Jee(Main) Seats)',
+    'B.E/B.Tech/B.Arch (Wbjee) Seats)',
+    'B. Arch (Jee(Main) Seats)',
+    'B.E/B.Tech (Wbjee/Jee(Main) Seats)/B.Arch (Wbjee Seats)'
+]
 
 # Get unique values for filters
 programs = sorted([x for x in data['Program'].unique() if pd.notna(x) and x != 'Unknown'])
@@ -67,12 +74,18 @@ seat_types = sorted([x for x in data['Seat Type'].unique() if pd.notna(x) and x 
 rounds = sorted([x for x in data['Round'].unique() if pd.notna(x)])
 years = sorted([x for x in data['Year'].unique() if x != 0])
 
+# Extract non-TFW programs (remove TFW suffix for filtering)
+non_tfw_programs = sorted(list(set([re.sub(r'\s*-\s*Tfw$', '', prog, flags=re.IGNORECASE) for prog in programs if not prog.endswith('- Tfw')])))
+tfw_programs = [prog for prog in programs if prog.endswith('- Tfw')]
+
 # Verify data
 logger.debug(f"Columns: {data.columns.tolist()}")
 logger.debug(f"Unique Years: {data['Year'].unique()}")
 logger.debug(f"Unique Seat Types: {data['Seat Type'].unique()}")
 logger.debug(f"Unique Categories: {data['Category'].unique()}")
 logger.debug(f"Unique Programs: {programs}")
+logger.debug(f"Non-TFW Programs: {non_tfw_programs}")
+logger.debug(f"TFW Programs: {tfw_programs}")
 
 # Email validation function (only Gmail addresses)
 def is_valid_gmail(email):
@@ -213,12 +226,6 @@ INDEX_HTML = """
                 <label class="form-label" for="program">Course (Program)</label>
                 <select class="form-control" id="program" name="program" disabled>
                     <option value="Any" {% if form_data.get('program') == 'Any' %}selected{% endif %}>Any</option>
-                    {% for program in programs %}
-                        {% if program != 'Cloud Computing - Tfw' %}
-                            <option value="{{ program }}" {% if form_data.get('program') == program %}selected{% endif %}>{{ program }}</option>
-                        {% endif %}
-                    {% endfor %}
-                    <option value="Cloud Computing - Tfw" style="display: none;" {% if form_data.get('program') == 'Cloud Computing - Tfw' %}selected{% endif %}>Cloud Computing - Tfw</option>
                 </select>
             </div>
             <div class="mb-3">
@@ -329,6 +336,7 @@ INDEX_HTML = """
             document.getElementById('reset-password-form').classList.remove('active');
             document.getElementById('predictor-form').style.display = 'block';
             hideErrors();
+            updateFormState(); // Ensure form state is updated on page load
         };
 
         function hideErrors() {
@@ -467,7 +475,7 @@ INDEX_HTML = """
             }
         });
 
-        // Enable form fields and submit button when rank and stream are selected
+        // Form state management
         const rankInput = document.getElementById('rank');
         const streamSelect = document.getElementById('stream');
         const programSelect = document.getElementById('program');
@@ -476,6 +484,58 @@ INDEX_HTML = """
         const roundSelect = document.getElementById('round');
         const yearSelect = document.getElementById('year');
         const submitBtn = document.getElementById('submit-btn');
+
+        // Store all programs for dynamic filtering
+        const allPrograms = {{ programs|tojson }};
+        const nonTfwPrograms = {{ non_tfw_programs|tojson }};
+        const tfwPrograms = {{ tfw_programs|tojson }};
+
+        function updateProgramOptions() {
+            const selectedStream = streamSelect.value;
+            const selectedSeatType = seatTypeSelect.value;
+            const isTfw = selectedSeatType === 'Tuition Fee Waiver';
+            programSelect.innerHTML = '<option value="Any" ' + (programSelect.value === 'Any' ? 'selected' : '') + '>Any</option>';
+
+            let availablePrograms = [];
+            if (isTfw) {
+                // Show only TFW programs
+                availablePrograms = tfwPrograms;
+            } else {
+                // Show non-TFW programs
+                availablePrograms = nonTfwPrograms;
+            }
+
+            // Filter programs based on stream (simplified; assumes programs are associated with streams in dataset)
+            availablePrograms.forEach(program => {
+                const option = document.createElement('option');
+                option.value = isTfw ? program + ' - Tfw' : program;
+                option.textContent = isTfw ? program + ' - Tfw' : program;
+                if (programSelect.value === option.value) {
+                    option.selected = true;
+                }
+                programSelect.appendChild(option);
+            });
+
+            // Reset program if current selection is invalid
+            if (!availablePrograms.includes(programSelect.value.replace(' - Tfw', '')) && programSelect.value !== 'Any') {
+                programSelect.value = 'Any';
+            }
+        }
+
+        function updateSeatTypeOptions() {
+            const selectedStream = streamSelect.value;
+            seatTypeSelect.innerHTML = '<option value="Any" ' + (seatTypeSelect.value === 'Any' ? 'selected' : '') + '>Any</option>';
+            const availableSeatTypes = selectedStream === 'B. Pharma' ? ['Wbjee'] : {{ seat_types|tojson }};
+            availableSeatTypes.forEach(seatType => {
+                const option = document.createElement('option');
+                option.value = seatType;
+                option.textContent = seatType;
+                if (seatTypeSelect.value === seatType) {
+                    option.selected = true;
+                }
+                seatTypeSelect.appendChild(option);
+            });
+        }
 
         function updateFormState() {
             const rankValid = rankInput.value && rankInput.value >= 1 && rankInput.value <= 1000000;
@@ -489,21 +549,21 @@ INDEX_HTML = """
             yearSelect.disabled = !enable;
             submitBtn.disabled = !enable;
 
-            // Show/hide Cloud Computing - TFW based on Seat Type
-            const tfwOption = programSelect.querySelector('option[value="Cloud Computing - Tfw"]');
-            if (seatTypeSelect.value === 'Tuition Fee Waiver') {
-                tfwOption.style.display = 'block';
+            if (enable) {
+                updateSeatTypeOptions();
+                updateProgramOptions();
             } else {
-                tfwOption.style.display = 'none';
-                if (programSelect.value === 'Cloud Computing - Tfw') {
-                    programSelect.value = 'Any';
-                }
+                programSelect.innerHTML = '<option value="Any" selected>Any</option>';
+                seatTypeSelect.innerHTML = '<option value="Any" selected>Any</option>';
             }
         }
 
         rankInput.addEventListener('input', updateFormState);
-        streamSelect.addEventListener('change', updateFormState);
-        seatTypeSelect.addEventListener('change', updateFormState);
+        streamSelect.addEventListener('change', () => {
+            updateFormState();
+            updateProgramOptions();
+        });
+        seatTypeSelect.addEventListener('change', updateProgramOptions);
 
         document.getElementById('predict-form').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -783,13 +843,13 @@ RESULTS_HTML = """
 @app.route('/')
 def home():
     form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'stream', 'program', 'category', 'seat_type', 'round', 'year']}
-    return render_template_string(INDEX_HTML, programs=programs, categories=categories,
+    return render_template_string(INDEX_HTML, programs=programs, non_tfw_programs=non_tfw_programs, tfw_programs=tfw_programs, categories=categories,
                                seat_types=seat_types, rounds=rounds, years=years, streams=streams, form_data=form_data)
 
 @app.route('/predictor')
 def predictor():
     form_data = {k: urllib.parse.unquote(v) for k, v in request.args.items() if k in ['rank', 'stream', 'program', 'category', 'seat_type', 'round', 'year']}
-    return render_template_string(INDEX_HTML, programs=programs, categories=categories,
+    return render_template_string(INDEX_HTML, programs=programs, non_tfw_programs=non_tfw_programs, tfw_programs=tfw_programs, categories=categories,
                                seat_types=seat_types, rounds=rounds, years=years, streams=streams, form_data=form_data)
 
 @app.route('/predict', methods=['POST'])
@@ -831,13 +891,16 @@ def predict():
             start_closing_rank = 26000
 
         # Apply filters
+        if stream:
+            # Filter programs based on stream (assuming dataset has a mapping; simplified here)
+            temp_data = temp_data[temp_data['Program'].isin([p for p in programs if stream in p or stream == 'B. Pharma' and 'Pharmacy' in p])]
         if program != 'Any':
             temp_data = temp_data[temp_data['Program'] == program]
         if category != 'Any':
             # Include selected category and Open category
             temp_data = temp_data[temp_data['Category'].isin([category, 'Open'])]
         else:
-            # If Any, still include Open category explicitly
+            # If Any, include Open category
             temp_data = temp_data[temp_data['Category'] == 'Open']
         if seat_type != 'Any':
             temp_data = temp_data[temp_data['Seat Type'] == seat_type]
